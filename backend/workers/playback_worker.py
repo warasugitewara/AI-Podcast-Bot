@@ -63,10 +63,12 @@ class PlaybackWorker:
         self._done_event.clear()
         source = discord.FFmpegPCMAudio(str(wav_path))
 
+        loop = asyncio.get_event_loop()
+
         def _after(err):
             if err:
                 log.error(f"再生エラー: {err}")
-            asyncio.get_event_loop().call_soon_threadsafe(self._done_event.set)
+            loop.call_soon_threadsafe(self._done_event.set)
 
         self.bot.play_audio(source, after_callback=_after)
         await self._push_status("playing", f"[{job_type}] {label}")

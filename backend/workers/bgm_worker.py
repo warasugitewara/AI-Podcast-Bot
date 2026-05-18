@@ -1,15 +1,36 @@
 """
-BgmWorker: bgm_prefetch_queue からクエリを取り出し、
+BgmWorker: bgm_prefetch_queue からクエリ/URLを取り出し、
 yt-dlp で音楽をダウンロード → playback_queue に投入する。
-ダウンロード開始時に idle_event をクリアして再生中扱いにする。
+- YouTube URL / YouTube Music URL の直接ダウンロードに対応
+- クエリ未指定時: 30%の確率でYouTube Musicトレンド曲、残りはプリセット
 """
 import asyncio
 import logging
+import random
 
 from services.ytdlp_service import get_bgm
 from services.llm import pick_bgm_query
 
 log = logging.getLogger("bgm_worker")
+
+
+async def _resolve_query(job: dict) -> str:
+    """ジョブからBGMクエリ/URLを決定する"""
+    q = job.get("query", "").strip()
+    if q:
+        return q  # ユーザー指定 (URL or キーワード) を最優先
+
+    # 30%の確率でYouTube Musicトレンド曲を選択
+    if random.random() < 0.3:
+        try:
+            from services.ytmusic_service import pick_trending_url
+            url = await pick_trending_url(country="JP")
+            if url:
+                return url
+        except Exception as e:
+            log.debug(f"トレンド取得スキップ: {e}")
+
+    return pick_bgm_query()  # プリセットリストから選択
 
 
 class BgmWorker:
@@ -34,10 +55,10 @@ class BgmWorker:
                 # ダウンロード開始時点でビジーマーク（race condition防止）
                 self.idle_event.clear()
 
-                query   = job.get("query") or pick_bgm_query()
+                query   = await _resolve_query(job)
                 enqueue = job.get("enqueue", True)
 
-                await self._push_status("bgm_fetching", query)
+                await self._push_status("bgm_fetching", query[:60])
                 log.info(f"BGM取得開始: {query!r}")
 
                 bgm_path = await get_bgm(query)
@@ -47,8 +68,7 @@ class BgmWorker:
                     await self._push_status("bgm_ready", bgm_path.name)
                 else:
                     log.warning(f"BGM取得失敗: {query!r}")
-                    await self._push_status("bgm_failed", query)
-                    # 失敗時はアイドルに戻す（PlaybackWorkerが設定しないため）
+                    await self._push_status("bgm_failed", query[:60])
                     if self.playback_queue.empty():
                         self.idle_event.set()
 
@@ -67,3 +87,4 @@ class BgmWorker:
             self.status_queue.put_nowait({"event": event, "detail": detail})
         except asyncio.QueueFull:
             pass
+

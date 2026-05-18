@@ -55,7 +55,7 @@ async def main():
 
     # ─── API サーバー ─────────────────────────────────────
     from api_server import build_app
-    app    = build_app(bot, speech_queue, bgm_prefetch_q,
+    app    = build_app(bot, speech_queue, tts_queue, bgm_prefetch_q,
                        music_request_queue, status_queue)
     runner = web.AppRunner(app)
     await runner.setup()

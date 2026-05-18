@@ -1,6 +1,6 @@
 import { Context, Next } from "hono";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
-import { crypto } from "bun";
+import { randomUUID } from "node:crypto";
 
 const BACKEND_URL    = process.env.BACKEND_API_URL ?? "http://127.0.0.1:8080";
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30日
@@ -64,7 +64,7 @@ export async function handleLogin(c: Context) {
   if (!ok) return c.redirect("/login?error=1");
 
   // セッション発行
-  const sid = crypto.randomUUID();
+  const sid = randomUUID();
   sessions.set(sid, { ip: getIp(c), createdAt: Date.now() });
 
   setCookie(c, "sid", sid, {
