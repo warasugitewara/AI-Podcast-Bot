@@ -39,11 +39,16 @@ async def main():
     playback_idle = asyncio.Event()
     playback_idle.set()
 
+    # 放送アクティブフラグ（Set=放送中, Clear=VC空室停止中）
+    broadcast_active = asyncio.Event()
+    broadcast_active.set()
+
     # ─── ワーカー・Bot ────────────────────────────────────
     bot      = RadioBot(speech_queue, playback_queue, bgm_prefetch_q,
-                        music_request_queue, status_queue)
+                        music_request_queue, status_queue, broadcast_active)
     speech   = SpeechWorker(speech_queue, tts_queue, bgm_prefetch_q,
-                            music_request_queue, status_queue, playback_idle)
+                            music_request_queue, status_queue, playback_idle,
+                            broadcast_active)
     tts      = TtsWorker(tts_queue, playback_queue, status_queue)
     playback = PlaybackWorker(playback_queue, bot, status_queue, playback_idle)
     bgm      = BgmWorker(bgm_prefetch_q, playback_queue, status_queue, playback_idle)

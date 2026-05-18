@@ -179,11 +179,23 @@ def build_app(bot, speech_queue, bgm_prefetch_q, music_request_queue, status_que
         code = generate()
         return web.json_response({"code": code})
 
+    async def get_nim_usage(request: web.Request):
+        """NIM日次使用状況を返す"""
+        from services.llm import get_daily_usage
+        from config import NIM_MIN_INTERVAL_SEC
+        usage = get_daily_usage()
+        return web.json_response({
+            **usage,
+            "remaining": max(0, usage["limit"] - usage["used"]),
+            "min_interval_sec": NIM_MIN_INTERVAL_SEC,
+        })
+
     app.router.add_get("/status",           get_status)
     app.router.add_get("/speakers",         get_speakers)
     app.router.add_get("/sse",              sse_status)
     app.router.add_get("/cast",             get_cast)
     app.router.add_get("/chars",            get_chars)
+    app.router.add_get("/nim-usage",        get_nim_usage)
     app.router.add_post("/talk",            post_talk)
     app.router.add_post("/bgm",             post_bgm)
     app.router.add_post("/music",           post_music)

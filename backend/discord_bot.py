@@ -11,6 +11,7 @@ from discord import app_commands
 from config import (
     DISCORD_TOKEN, DISCORD_GUILD_ID,
     DISCORD_VOICE_CHANNEL_ID,
+    VC_EMPTY_TIMEOUT_SEC,
 )
 
 log = logging.getLogger("discord_bot")
@@ -199,7 +200,8 @@ class PodcastCog(commands.Cog):
 
 # ─── Bot 本体 ──────────────────────────────────────────────────
 class RadioBot(commands.Bot):
-    def __init__(self, speech_queue, playback_queue, bgm_prefetch_q, music_request_queue, status_queue):
+    def __init__(self, speech_queue, playback_queue, bgm_prefetch_q, music_request_queue, status_queue,
+                 broadcast_active: asyncio.Event):
         intents = discord.Intents.default()
         intents.message_content = True
         intents.voice_states = True
@@ -210,8 +212,10 @@ class RadioBot(commands.Bot):
         self.bgm_prefetch_q      = bgm_prefetch_q
         self.music_request_queue = music_request_queue
         self.status_queue        = status_queue
+        self.broadcast_active    = broadcast_active  # Set=放送中, Cleared=一時停止
 
         self.voice_client: discord.VoiceClient | None = None
+        self._empty_timer: asyncio.Task | None = None  # VC空室タイマー
 
     async def setup_hook(self):
         """CogとスラッシュコマンドをGuildに同期"""
@@ -272,10 +276,69 @@ class RadioBot(commands.Bot):
         except asyncio.QueueFull:
             pass
 
-    # ─── 切断イベント (自動再接続) ──────────────────────────
-    async def on_voice_state_update(self, member, before, after):
-        if member != self.user:
+    # ─── 切断イベント (自動再接続 + VC空室検知) ────────────
+    async def on_voice_state_update(self, member: discord.Member, before, after):
+        # ── Bot自身の切断 → 再接続 ──────────────────────────
+        if member == self.user:
+            if before.channel and not after.channel:
+                log.warning("ボイスチャンネルから切断されました。再接続します...")
+                asyncio.create_task(self._schedule_reconnect(delay=5.0))
             return
-        if before.channel and not after.channel:
-            log.warning("ボイスチャンネルから切断されました。再接続します...")
-            asyncio.create_task(self._schedule_reconnect(delay=5.0))
+
+        # ── 人間の入退室 → VC空室タイマー管理 ───────────────
+        if VC_EMPTY_TIMEOUT_SEC <= 0:
+            return  # 機能無効
+
+        guild   = self.get_guild(DISCORD_GUILD_ID)
+        channel = guild and guild.get_channel(DISCORD_VOICE_CHANNEL_ID)
+        if not channel:
+            return
+
+        human_count = sum(1 for m in channel.members if not m.bot)
+
+        if human_count == 0:
+            # 全員退室 → タイマー開始（重複防止）
+            if self._empty_timer is None or self._empty_timer.done():
+                log.info(f"VC空室検知。{VC_EMPTY_TIMEOUT_SEC}秒後に放送を一時停止します")
+                await self._push_status("vc_empty", f"{VC_EMPTY_TIMEOUT_SEC}秒後に停止")
+                self._empty_timer = asyncio.create_task(self._empty_timeout())
+        else:
+            # 誰かが入室 → タイマーキャンセル
+            if self._empty_timer and not self._empty_timer.done():
+                self._empty_timer.cancel()
+                self._empty_timer = None
+                log.info(f"VC復帰 ({human_count}人)。タイマーキャンセル")
+
+            # 停止中だった場合は放送再開を案内
+            if not self.broadcast_active.is_set():
+                self.broadcast_active.set()
+                log.info("放送アクティブ状態に復帰")
+                await self._notify_vc(
+                    f"👋 {member.display_name} さんが入室しました。\n"
+                    f"▶ `/start` で放送を再開できます。"
+                )
+
+    async def _empty_timeout(self):
+        """VC空室タイムアウト処理"""
+        try:
+            await asyncio.sleep(VC_EMPTY_TIMEOUT_SEC)
+            log.info("VC空室タイムアウト。放送を一時停止します")
+            self.stop()                      # 現在の再生を停止
+            self.broadcast_active.clear()    # ContentScheduler の新規生成を停止
+            await self._push_status("paused_empty_vc", "VC空室のため停止")
+            await self._notify_vc(
+                "⏸ ボイスチャンネルが空になったため放送を一時停止しました。\n"
+                "入室後 `/start` で再開できます。"
+            )
+        except asyncio.CancelledError:
+            pass  # 誰かが戻ってきた
+
+    async def _notify_vc(self, message: str):
+        """VCのテキストチャット (同一チャンネルID) にメッセージを送信"""
+        try:
+            guild   = self.get_guild(DISCORD_GUILD_ID)
+            channel = guild and guild.get_channel(DISCORD_VOICE_CHANNEL_ID)
+            if channel and hasattr(channel, "send"):
+                await channel.send(message)
+        except Exception as e:
+            log.warning(f"VC通知失敗: {e}")

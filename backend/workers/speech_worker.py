@@ -33,6 +33,7 @@ class SpeechWorker:   # 後方互換でクラス名は維持
         music_request_queue:  asyncio.Queue,
         status_queue:         asyncio.Queue,
         idle_event:           asyncio.Event,
+        broadcast_active:     asyncio.Event,
     ):
         self.speech_queue        = speech_queue
         self.tts_queue           = tts_queue
@@ -40,6 +41,7 @@ class SpeechWorker:   # 後方互換でクラス名は維持
         self.music_request_queue = music_request_queue
         self.status_queue        = status_queue
         self.idle_event          = idle_event
+        self.broadcast_active    = broadcast_active
 
         self._last_gen_time  = 0.0
         self._episode_count  = 0
@@ -49,6 +51,9 @@ class SpeechWorker:   # 後方互換でクラス名は維持
         log.info("ContentScheduler 起動")
         while True:
             try:
+                # VC空室中は新規生成しない（LLMコールとTTS生成を節約）
+                await self.broadcast_active.wait()
+
                 await self.idle_event.wait()
 
                 # ── 優先1: ユーザー音楽リクエスト ──────────────

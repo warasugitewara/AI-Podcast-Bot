@@ -49,3 +49,6 @@ NIM_MAX_DAILY_REQUESTS = int(_get("NIM_MAX_DAILY_REQUESTS", "150"))
 NIM_MIN_INTERVAL_SEC   = int(_get("NIM_MIN_INTERVAL_SEC", "120"))
 # LLMに渡すコンテキストの最大文字数（input tokens節約）
 NIM_CONTEXT_MAX_CHARS  = int(_get("NIM_CONTEXT_MAX_CHARS", "400"))
+
+# VC 空室時の自動停止タイムアウト（秒）。0 で無効
+VC_EMPTY_TIMEOUT_SEC = int(_get("VC_EMPTY_TIMEOUT_SEC", "300"))
