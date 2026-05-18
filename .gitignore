@@ -1,0 +1,34 @@
+# 環境変数・秘密情報
+.env
+*.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Node / Bun
+node_modules/
+bun.lockb
+
+# ログ・キャッシュ (HDD側に置くため)
+*.log
+*.wav
+*.opus
+*.mp3
+*.webm
+*.m4a
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

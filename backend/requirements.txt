@@ -1,0 +1,8 @@
+discord.py>=2.4.0
+aiohttp>=3.10.0
+yt-dlp>=2024.11.0
+yfinance>=0.2.40
+feedparser>=6.0.11
+python-dotenv>=1.0.0
+openai>=1.50.0
+PyNaCl>=1.5.0
