@@ -49,22 +49,28 @@ def get_daily_usage() -> dict:
 
 
 # ─── BGMクエリプール（LLM不使用）──────────────────────────
+# "official audio" を付けることでカラオケ・cover版が上位に来にくくする
 _BGM_POOL = [
-    "lofi hip hop radio beats to relax study to",
-    "lofi jazz cafe background music",
-    "chill lofi beats no copyright free",
-    "smooth jazz background music instrumental",
-    "bossa nova cafe jazz music",
-    "jazz coffee shop background music",
-    "ambient electronic chill background music",
-    "synthwave lo-fi no copyright",
-    "chillwave background music instrumental",
-    "light classical background music piano",
-    "upbeat background music no copyright instrumental",
-    "funky jazz background instrumental",
-    "piano lofi beats relaxing",
-    "guitar acoustic background chill",
-    "city pop japanese style instrumental",
+    "lofi hip hop radio beats to relax study to official",
+    "lofi jazz cafe background music official audio",
+    "chill lofi beats no copyright free music",
+    "smooth jazz background music official audio",
+    "bossa nova cafe jazz official audio",
+    "jazz coffee shop background music official",
+    "ambient electronic chill background music official",
+    "synthwave lo-fi no copyright official audio",
+    "chillwave background music official audio",
+    "classical piano background music official",
+    "upbeat background music no copyright official",
+    "funky jazz instrumental official audio",
+    "piano lofi beats relaxing official",
+    "acoustic guitar background chill official audio",
+    "city pop japanese style official audio",
+    "j-pop official audio BGM",
+    "vaporwave aesthetic music official audio",
+    "study music concentration official audio",
+    "neo soul background music official",
+    "indie pop chill music official audio",
 ]
 _bgm_pool_index = 0
 
