@@ -64,16 +64,19 @@ async def fetch_stocks() -> str:
 
 async def build_context() -> str:
     """ニュース・株価を並行取得してコンテキスト文字列を返す。"""
+    from config import NIM_CONTEXT_MAX_CHARS
     hn, rss, stocks = await asyncio.gather(
-        fetch_hackernews(5),
-        fetch_rss(3),
+        fetch_hackernews(3),   # 5→3 でトークン節約
+        fetch_rss(2),
         fetch_stocks(),
     )
     parts = []
     if hn:
-        parts.append("【Hacker News トレンド】\n" + "\n".join(f"- {t}" for t in hn))
+        parts.append("HN:" + " / ".join(hn))
     if rss:
-        parts.append("【海外ニュース】\n" + "\n".join(f"- {t}" for t in rss))
+        parts.append("News:" + " / ".join(rss[:4]))
     if stocks:
-        parts.append("【市場情報】\n" + stocks)
-    return "\n\n".join(parts)
+        parts.append(stocks)
+    full = " | ".join(parts)
+    # 文字数上限でinput tokens節約
+    return full[:NIM_CONTEXT_MAX_CHARS]

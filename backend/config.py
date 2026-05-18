@@ -41,3 +41,11 @@ TTS_CACHE_DIR = DATA_DIR / "tts_cache"
 
 # Web
 BACKEND_API_PORT = int(_get("BACKEND_API_PORT", "8080"))
+
+# NVIDIA NIM 無料枠制限
+# 1日あたりの最大LLMリクエスト数（超えたら生成停止→BGM/キャッシュで補完）
+NIM_MAX_DAILY_REQUESTS = int(_get("NIM_MAX_DAILY_REQUESTS", "150"))
+# 自動生成の最小間隔（秒）。手動リクエストはこの制限を受けない
+NIM_MIN_INTERVAL_SEC   = int(_get("NIM_MIN_INTERVAL_SEC", "120"))
+# LLMに渡すコンテキストの最大文字数（input tokens節約）
+NIM_CONTEXT_MAX_CHARS  = int(_get("NIM_CONTEXT_MAX_CHARS", "400"))

@@ -1,6 +1,5 @@
 """
 AI Podcast Bot バックエンド エントリーポイント
-asyncio.Queue x4 + ワーカー起動 + Discord Bot + aiohttp APIサーバー
 """
 import asyncio
 import logging
@@ -15,7 +14,6 @@ from workers.tts_worker import TtsWorker
 from workers.playback_worker import PlaybackWorker
 from workers.bgm_worker import BgmWorker
 
-# ─── ログ設定 ──────────────────────────────────────────
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
@@ -29,43 +27,48 @@ log = logging.getLogger("main")
 
 
 async def main():
-    # ─── キュー定義 ──────────────────────────────────────
-    speech_queue    = asyncio.Queue(maxsize=10)
-    tts_queue       = asyncio.Queue(maxsize=10)
-    playback_queue  = asyncio.Queue(maxsize=10)
-    bgm_prefetch_q  = asyncio.Queue(maxsize=5)
+    # ─── キュー＆イベント定義 ──────────────────────────────
+    speech_queue         = asyncio.Queue(maxsize=10)
+    tts_queue            = asyncio.Queue(maxsize=20)
+    playback_queue       = asyncio.Queue(maxsize=20)
+    bgm_prefetch_q       = asyncio.Queue(maxsize=5)
+    music_request_queue  = asyncio.Queue(maxsize=20)
+    status_queue         = asyncio.Queue(maxsize=50)
 
-    # SSE用ステータスキュー (frontendへ)
-    status_queue = asyncio.Queue(maxsize=50)
+    # 再生アイドル状態フラグ（Set=アイドル, Clear=再生/生成中）
+    playback_idle = asyncio.Event()
+    playback_idle.set()
 
-    # ─── ワーカーとBot ────────────────────────────────────
-    bot     = RadioBot(speech_queue, playback_queue, bgm_prefetch_q, status_queue)
-    speech  = SpeechWorker(speech_queue, tts_queue, status_queue)
-    tts     = TtsWorker(tts_queue, playback_queue, status_queue)
-    playback= PlaybackWorker(playback_queue, bot, status_queue)
-    bgm     = BgmWorker(bgm_prefetch_q, playback_queue, status_queue)
+    # ─── ワーカー・Bot ────────────────────────────────────
+    bot      = RadioBot(speech_queue, playback_queue, bgm_prefetch_q,
+                        music_request_queue, status_queue)
+    speech   = SpeechWorker(speech_queue, tts_queue, bgm_prefetch_q,
+                            music_request_queue, status_queue, playback_idle)
+    tts      = TtsWorker(tts_queue, playback_queue, status_queue)
+    playback = PlaybackWorker(playback_queue, bot, status_queue, playback_idle)
+    bgm      = BgmWorker(bgm_prefetch_q, playback_queue, status_queue, playback_idle)
 
-    # ─── aiohttp APIサーバー (frontendからのコマンド受信) ──
+    # ─── API サーバー ─────────────────────────────────────
     from api_server import build_app
-    app = build_app(bot, speech_queue, bgm_prefetch_q, status_queue)
+    app    = build_app(bot, speech_queue, bgm_prefetch_q,
+                       music_request_queue, status_queue)
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, "127.0.0.1", BACKEND_API_PORT)
+    site   = web.TCPSite(runner, "127.0.0.1", BACKEND_API_PORT)
     await site.start()
     log.info(f"APIサーバー起動: http://127.0.0.1:{BACKEND_API_PORT}")
 
     # ─── タスク起動 ──────────────────────────────────────
     tasks = [
-        asyncio.create_task(speech.run(),   name="speech_worker"),
-        asyncio.create_task(tts.run(),      name="tts_worker"),
-        asyncio.create_task(playback.run(), name="playback_worker"),
-        asyncio.create_task(bgm.run(),      name="bgm_worker"),
-        asyncio.create_task(bot.start_bot(),name="discord_bot"),
+        asyncio.create_task(speech.run(),    name="content_scheduler"),
+        asyncio.create_task(tts.run(),       name="tts_worker"),
+        asyncio.create_task(playback.run(),  name="playback_worker"),
+        asyncio.create_task(bgm.run(),       name="bgm_worker"),
+        asyncio.create_task(bot.start_bot(), name="discord_bot"),
     ]
     log.info("全ワーカー起動完了")
 
-    # Graceful shutdown
-    loop = asyncio.get_running_loop()
+    loop       = asyncio.get_running_loop()
     stop_event = asyncio.Event()
 
     def _shutdown(*_):

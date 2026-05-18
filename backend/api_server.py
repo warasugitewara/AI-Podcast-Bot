@@ -11,7 +11,189 @@ from aiohttp import web
 log = logging.getLogger("api_server")
 
 
-def build_app(bot, speech_queue, bgm_prefetch_q, status_queue) -> web.Application:
+def build_app(bot, speech_queue, bgm_prefetch_q, music_request_queue, status_queue) -> web.Application:
+    app = web.Application()
+
+    # ─── SSE: ステータスストリーミング ──────────────────────
+    async def sse_status(request: web.Request):
+        resp = web.StreamResponse(headers={
+            "Content-Type":  "text/event-stream",
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        })
+        await resp.prepare(request)
+
+        listeners: list = request.app.setdefault("sse_listeners", [])
+        q: asyncio.Queue = asyncio.Queue()
+        listeners.append(q)
+        try:
+            while True:
+                msg = await q.get()
+                data = json.dumps(msg, ensure_ascii=False)
+                await resp.write(f"data: {data}\n\n".encode())
+        except (asyncio.CancelledError, ConnectionResetError):
+            pass
+        finally:
+            listeners.remove(q)
+        return resp
+
+    # ─── ステータスブロードキャスト (background task) ────────
+    async def _broadcast_status(app: web.Application):
+        while True:
+            try:
+                msg = await status_queue.get()
+                for q in list(app.get("sse_listeners", [])):
+                    try:
+                        q.put_nowait(msg)
+                    except asyncio.QueueFull:
+                        pass
+            except asyncio.CancelledError:
+                break
+
+    async def on_startup(app: web.Application):
+        app["broadcast_task"] = asyncio.create_task(_broadcast_status(app))
+
+    async def on_cleanup(app: web.Application):
+        app["broadcast_task"].cancel()
+        await asyncio.gather(app["broadcast_task"], return_exceptions=True)
+
+    app.on_startup.append(on_startup)
+    app.on_cleanup.append(on_cleanup)
+
+    # ─── REST エンドポイント ─────────────────────────────────
+    async def post_talk(request: web.Request):
+        """トークをキューに追加"""
+        body = await request.json()
+        await speech_queue.put({
+            "topic":      body.get("topic", "最新テクノロジー"),
+            "speaker_id": body.get("speaker_id"),
+            "speed":      body.get("speed", 1.0),
+            "pitch":      body.get("pitch", 0.0),
+        })
+        return web.json_response({"ok": True, "queued": "talk"})
+
+    async def post_bgm(request: web.Request):
+        """BGMリクエストをキューに追加"""
+        body = await request.json()
+        await bgm_prefetch_q.put({
+            "query":   body.get("query", ""),
+            "context": body.get("context", ""),
+            "enqueue": body.get("enqueue", True),
+        })
+        return web.json_response({"ok": True, "queued": "bgm"})
+
+    async def post_music(request: web.Request):
+        """ユーザー音楽リクエストをキューに追加"""
+        body = await request.json()
+        query = body.get("query", "").strip()
+        if not query:
+            return web.json_response({"ok": False, "error": "query is required"}, status=400)
+        await music_request_queue.put({
+            "query": query,
+            "title": body.get("title", query),
+        })
+        return web.json_response({"ok": True, "queued": "music", "query": query})
+
+    async def post_stop(request: web.Request):
+        """現在の再生を停止"""
+        bot.stop()
+        return web.json_response({"ok": True, "action": "stop"})
+
+    async def get_status(request: web.Request):
+        """現在の状態をスナップショットで返す"""
+        return web.json_response({
+            "is_playing":          bot.is_playing(),
+            "speech_queue":        speech_queue.qsize(),
+            "bgm_queue":           bgm_prefetch_q.qsize(),
+            "music_request_queue": music_request_queue.qsize(),
+        })
+
+    async def get_speakers(request: web.Request):
+        """VOICEVOXの話者一覧を返す"""
+        from services.voicevox import VoicevoxService
+        try:
+            speakers = await VoicevoxService().get_speakers()
+            return web.json_response(speakers)
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=502)
+
+    async def get_cast(request: web.Request):
+        """現在のキャストを返す"""
+        from services.character_manager import character_manager, CASTS
+        chars = character_manager.active()
+        cast_info = CASTS.get(character_manager.cast_name, {})
+        return web.json_response({
+            "cast_name":  character_manager.cast_name,
+            "cast_label": cast_info.get("label", "カスタム"),
+            "characters": [
+                {"id": c.id, "name": c.name, "role": c.role,
+                 "speaker_id": c.speaker_id, "speaker_name": c.speaker_name}
+                for c in chars
+            ],
+        })
+
+    async def post_cast(request: web.Request):
+        """キャストを変更する"""
+        from services.character_manager import character_manager
+        body = await request.json()
+        name = body.get("name", "").strip()
+        if not name:
+            return web.json_response({"ok": False, "error": "name is required"}, status=400)
+        result = character_manager.set_cast(name)
+        if result is None:
+            return web.json_response({"ok": False, "error": f"cast '{name}' not found"}, status=404)
+        return web.json_response({"ok": True, "cast_name": name, "cast_label": result["label"]})
+
+    async def get_chars(request: web.Request):
+        """キャラクター一覧を返す"""
+        from services.character_manager import CHARACTERS
+        return web.json_response([
+            {"id": c.id, "name": c.name, "role": c.role,
+             "speaker_id": c.speaker_id, "speaker_name": c.speaker_name,
+             "style": c.style}
+            for c in CHARACTERS.values()
+        ])
+
+    async def post_shuffle(request: web.Request):
+        """キャストをランダム変更する"""
+        from services.character_manager import character_manager
+        result = character_manager.shuffle()
+        return web.json_response({
+            "ok": True,
+            "cast_name":  character_manager.cast_name,
+            "cast_label": result["label"],
+        })
+
+    # ─── OTP エンドポイント (Discord bot → Hono 検証用) ──────
+    async def post_otp_verify(request: web.Request):
+        """Hono からの OTP 検証リクエスト (127.0.0.1 のみ受付)"""
+        from otp_store import verify
+        body = await request.json()
+        code = str(body.get("code", ""))
+        ok   = verify(code)
+        return web.json_response({"ok": ok})
+
+    async def post_otp_generate(request: web.Request):
+        """Discord bot からの OTP 生成リクエスト (127.0.0.1 のみ受付)"""
+        from otp_store import generate
+        code = generate()
+        return web.json_response({"code": code})
+
+    app.router.add_get("/status",           get_status)
+    app.router.add_get("/speakers",         get_speakers)
+    app.router.add_get("/sse",              sse_status)
+    app.router.add_get("/cast",             get_cast)
+    app.router.add_get("/chars",            get_chars)
+    app.router.add_post("/talk",            post_talk)
+    app.router.add_post("/bgm",             post_bgm)
+    app.router.add_post("/music",           post_music)
+    app.router.add_post("/stop",            post_stop)
+    app.router.add_post("/cast",            post_cast)
+    app.router.add_post("/shuffle",         post_shuffle)
+    app.router.add_post("/otp/verify",      post_otp_verify)
+    app.router.add_post("/otp/generate",    post_otp_generate)
+
+    return app
     app = web.Application()
 
     # ─── SSE: ステータスストリーミング ──────────────────────

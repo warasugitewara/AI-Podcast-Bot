@@ -1,37 +1,50 @@
 """
 PlaybackWorker: playback_queue から音声ジョブを取り出し、
 ffmpeg 経由で Discord VoiceClient に再生する。
-再生完了まで待機し、次のジョブへ進む。
+idle_event: 再生が完全に終わった時にセット、再生中はクリア。
 """
 import asyncio
 import logging
 from pathlib import Path
-
 import discord
 
 log = logging.getLogger("playback_worker")
 
 
 class PlaybackWorker:
-    def __init__(self, playback_queue: asyncio.Queue, bot, status_queue: asyncio.Queue):
+    def __init__(
+        self,
+        playback_queue: asyncio.Queue,
+        bot,
+        status_queue:   asyncio.Queue,
+        idle_event:     asyncio.Event,
+    ):
         self.playback_queue = playback_queue
         self.bot            = bot
         self.status_queue   = status_queue
+        self.idle_event     = idle_event
         self._done_event    = asyncio.Event()
 
     async def run(self):
         log.info("PlaybackWorker 起動")
+        self.idle_event.set()   # 起動時はアイドル
         while True:
             try:
                 job = await self.playback_queue.get()
+                self.idle_event.clear()
                 await self._play(job)
                 self.playback_queue.task_done()
+                # キューが空になったらアイドルをセット
+                if self.playback_queue.empty():
+                    self.idle_event.set()
+                    log.debug("playback idle")
 
             except asyncio.CancelledError:
                 log.info("PlaybackWorker 停止")
                 break
             except Exception as e:
                 log.error(f"PlaybackWorker エラー: {e}", exc_info=True)
+                self.idle_event.set()
                 await asyncio.sleep(3)
 
     async def _play(self, job: dict):
@@ -56,7 +69,7 @@ class PlaybackWorker:
             asyncio.get_event_loop().call_soon_threadsafe(self._done_event.set)
 
         self.bot.play_audio(source, after_callback=_after)
-        await self._push_status("playing", label)
+        await self._push_status("playing", f"[{job_type}] {label}")
         log.info(f"再生開始: [{job_type}] {label}")
 
         await self._done_event.wait()
