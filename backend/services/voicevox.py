@@ -32,40 +32,53 @@ class VoicevoxService:
         speaker_id: int | None = None,
         speed: float = 1.0,
         pitch: float = 0.0,
+        _retries: int = 3,
     ) -> Path:
-        """テキストをWAVファイルに変換してPathを返す。キャッシュヒット時は即座に返す。"""
+        """テキストをWAVファイルに変換してPathを返す。キャッシュヒット時は即座に返す。
+        500エラー時は最大 _retries 回リトライする（1秒間隔）。"""
         sid = speaker_id or self.speaker_id
         cached = self._cache_path(text, sid)
         if cached.exists():
             log.debug(f"TTSキャッシュヒット: {cached.name}")
             return cached
 
-        async with _vv_sem:
-            async with aiohttp.ClientSession() as session:
-                # Step1: audio_query
-                async with session.post(
-                    f"{self.url}/audio_query",
-                    params={"text": text, "speaker": sid},
-                ) as resp:
-                    resp.raise_for_status()
-                    query = await resp.json()
+        last_err: Exception | None = None
+        for attempt in range(_retries):
+            try:
+                async with _vv_sem:
+                    async with aiohttp.ClientSession() as session:
+                        # Step1: audio_query
+                        async with session.post(
+                            f"{self.url}/audio_query",
+                            params={"text": text, "speaker": sid},
+                        ) as resp:
+                            resp.raise_for_status()
+                            query = await resp.json()
 
-                query["speedScale"] = speed
-                query["pitchScale"] = pitch
+                        query["speedScale"] = speed
+                        query["pitchScale"] = pitch
 
-                # Step2: synthesis
-                async with session.post(
-                    f"{self.url}/synthesis",
-                    params={"speaker": sid},
-                    json=query,
-                    headers={"Content-Type": "application/json"},
-                ) as resp:
-                    resp.raise_for_status()
-                    wav_data = await resp.read()
+                        # Step2: synthesis
+                        async with session.post(
+                            f"{self.url}/synthesis",
+                            params={"speaker": sid},
+                            json=query,
+                            headers={"Content-Type": "application/json"},
+                        ) as resp:
+                            resp.raise_for_status()
+                            wav_data = await resp.read()
 
-        cached.write_bytes(wav_data)
-        log.info(f"TTS生成完了: {len(text)}文字 → {cached.name}")
-        return cached
+                cached.write_bytes(wav_data)
+                log.info(f"TTS生成完了: {len(text)}文字 → {cached.name}")
+                return cached
+
+            except Exception as e:
+                last_err = e
+                if attempt < _retries - 1:
+                    log.warning(f"VOICEVOX 500 retry {attempt + 1}/{_retries} (speaker={sid}): {e}")
+                    await asyncio.sleep(1.0)
+
+        raise last_err  # type: ignore
 
     async def get_speakers(self) -> list[dict]:
         async with aiohttp.ClientSession() as session:

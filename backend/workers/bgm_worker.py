@@ -79,6 +79,67 @@ _ANNOUNCE_REASON_DEFAULT = [
     "{reason}次は「{title}」です。",
 ]
 
+# 曲後コメントテンプレート
+_POST_COMMENT: dict[str, list[str]] = {
+    "haru": [
+        "「{title}」でした！良かったですね！",
+        "「{title}」どうでしたか？",
+        "いやー「{title}」、よかったです！",
+    ],
+    "ao": [
+        "「{title}」でした。",
+        "以上、「{title}」をお届けしました。",
+    ],
+    "yuki": [
+        "「{title}」でした。悪くないです。",
+        "「{title}」か。うん、まあよかったんじゃないですか。",
+    ],
+    "sora": [
+        "「{title}」でした！なんか気持ちよかったです！",
+        "いい曲でした、「{title}」！",
+    ],
+    "rei": [
+        "「{title}」でした。少し気持ちが落ち着きましたね。",
+        "ありがとうございました。「{title}」でした。",
+    ],
+    "ken": [
+        "「{title}」最高でした！",
+        "いやー熱い！「{title}」！",
+    ],
+    "nana": [
+        "「{title}」元気出てきましたね！",
+        "「{title}」よかったです！みんなも元気になれたかな？",
+    ],
+    "zona": [
+        "「{title}」でした！テンション上がりましたね！",
+        "「{title}」！最高の一曲でした！",
+    ],
+    "sayo": [
+        "「{title}」でした。",
+        "音が終わりました。「{title}」。",
+    ],
+    "shiro": [
+        "「{title}」って言うんですね。へえ〜。",
+        "「{title}」でしたよ。合ってましたか？",
+    ],
+    "nia": [
+        "「{title}」……なんかふわふわしました。",
+        "「{title}」は不思議な感じがしましたね。",
+    ],
+    "maron": [
+        "「{title}」でした。みなさんもゆっくりできましたか？",
+        "「{title}」、癒されましたね。",
+    ],
+    "nurse": [
+        "「{title}」でした。適切な選曲だったと思います。",
+        "「{title}」。再生終了です。",
+    ],
+}
+_POST_COMMENT_DEFAULT = [
+    "「{title}」でした。",
+    "以上、「{title}」をお届けしました。",
+]
+
 
 def _make_announce_text(title: str) -> tuple[str, int | None]:
     """現在アクティブなMCキャラクターのアナウンス文とspeaker_idを返す"""
@@ -192,7 +253,7 @@ class BgmWorker:
                     from services.program_memory import program_memory
                     program_memory.add_genre(query)
 
-                    # ① アナウンスTTSを先にWAV生成してからキューへ
+                    # ① 曲前アナウンスTTSを先に投入
                     if title:
                         await self._enqueue_announce(title)
 
@@ -200,6 +261,10 @@ class BgmWorker:
                     await self.playback_queue.put({"type": "bgm", "wav_path": bgm_path})
                     log.info(f"BGM → playback_queue: {bgm_path.name} ({title!r})")
                     await self._push_status("bgm_ready", title or bgm_path.name)
+
+                    # ③ 曲後コメント（30%の確率で挿入）
+                    if title:
+                        await self._enqueue_post_comment(title)
                 else:
                     log.warning(f"BGM取得失敗: {query!r}")
                     await self._push_status("bgm_failed", query[:60])
@@ -217,16 +282,46 @@ class BgmWorker:
                 await asyncio.sleep(5)
 
     async def _enqueue_announce(self, title: str):
-        """アナウンスWAVをVOICEVOXで生成してplayback_queueに先行投入する"""
+        """アナウンスWAVをVOICEVOXで生成してplayback_queueに先行投入する。
+        失敗時は別スピーカー(フォールバック)で1回リトライする。"""
+        from services.voicevox import VoicevoxService
+        text, speaker_id = _make_announce_text(title)
+        log.info(f"曲アナウンス生成: {text!r} (speaker={speaker_id})")
+        vv = VoicevoxService()
+        # voicevox.py 内で3回リトライ済み。それでも失敗した場合は別speakerで再試行
+        for sid in [speaker_id, 3, 8]:  # ずんだもん→春日部つむぎ にフォールバック
+            try:
+                wav = await vv.synthesize(text=text, speaker_id=sid)
+                await self.playback_queue.put({"type": "tts", "wav_path": wav, "text": text})
+                return
+            except Exception as e:
+                log.warning(f"アナウンス生成スキップ (speaker={sid}): {e}")
+
+    async def _enqueue_post_comment(self, title: str):
+        """曲後コメントWAVを生成してplayback_queueに投入する（30%の確率で実行）。"""
+        if random.random() > 0.30:
+            return
         try:
+            from services.character_manager import character_manager
             from services.voicevox import VoicevoxService
-            text, speaker_id = _make_announce_text(title)
-            log.info(f"曲アナウンス生成: {text!r} (speaker={speaker_id})")
-            vv  = VoicevoxService()
-            wav = await vv.synthesize(text=text, speaker_id=speaker_id)
-            await self.playback_queue.put({"type": "tts", "wav_path": wav, "text": text})
+            chars = character_manager.active()
+            if not chars:
+                return
+            mc = next((c for c in chars if "MC" in c.role or "進行" in c.role), chars[0])
+            trimmed = _trim_title(title)
+            templates = _POST_COMMENT.get(mc.id, _POST_COMMENT_DEFAULT)
+            text = random.choice(templates).format(title=trimmed)
+            log.info(f"曲後コメント生成: {text!r} (speaker={mc.speaker_id})")
+            vv = VoicevoxService()
+            for sid in [mc.speaker_id, 3, 8]:
+                try:
+                    wav = await vv.synthesize(text=text, speaker_id=sid)
+                    await self.playback_queue.put({"type": "tts", "wav_path": wav, "text": text})
+                    return
+                except Exception as e:
+                    log.warning(f"曲後コメント生成スキップ (speaker={sid}): {e}")
         except Exception as e:
-            log.warning(f"アナウンス生成スキップ: {e}")
+            log.warning(f"曲後コメントスキップ: {e}")
 
     async def _push_status(self, event: str, detail: str = ""):
         try:

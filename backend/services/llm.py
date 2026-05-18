@@ -344,12 +344,19 @@ async def generate_dialogue(
     context: str = "",
     chars: list | None = None,
     memory_ctx: str = "",
+    mode: str = "chat",  # "chat"(0.8) | "news"(0.4) | "transition"(0.6)
 ) -> tuple[list[dict], str]:
     """
     キャラクター対話台本を生成。
     戻り値: ([{"speaker": "ハル", "text": "..."}, ...], resolved_topic)
     日次上限超過時は ([], "") を返す（呼び出し側でBGMにフォールバック）。
+    mode で temperature を切り替え:
+      chat       → 0.8  (雑談・バラエティ系)
+      news       → 0.4  (ニュース・事実系、ハルシネーション抑制)
+      transition → 0.6  (曲振り・話題転換)
     """
+    _TEMP = {"chat": 0.8, "news": 0.4, "transition": 0.6}
+    temperature = _TEMP.get(mode, 0.8)
     if not _can_request():
         return [], ""
 
@@ -380,7 +387,7 @@ async def generate_dialogue(
             {"role": "user",   "content": user_content},
         ],
         max_tokens=1500,
-        temperature=0.9,
+        temperature=temperature,
     )
     raw = resp.choices[0].message.content.strip()
     log.info(f"対話生成完了: {len(raw)}文字")

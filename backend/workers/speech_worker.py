@@ -247,8 +247,10 @@ class SpeechWorker:   # 後方互換でクラス名は維持
             context = await build_context()
             chars   = character_manager.active()
             memory_ctx = program_memory.context_summary()
+            # contextがある（ニュース系）場合はnewsモード、それ以外はchat
+            mode = job.get("mode", "news" if context else "chat")
             lines, resolved_topic = await generate_dialogue(
-                topic=topic, context=context, chars=chars, memory_ctx=memory_ctx
+                topic=topic, context=context, chars=chars, memory_ctx=memory_ctx, mode=mode
             )
 
             if not lines:
