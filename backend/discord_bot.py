@@ -80,6 +80,31 @@ class RadioBot(commands.Bot):
         except asyncio.QueueFull:
             pass
 
+    # ─── !otp コマンド ────────────────────────────────────
+    @commands.command(name="otp")
+    async def cmd_otp(self, ctx: commands.Context):
+        """Web UI へのアクセス用 OTP を DM で送信する"""
+        import aiohttp
+        from config import BACKEND_API_PORT
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"http://127.0.0.1:{BACKEND_API_PORT}/otp/generate"
+                ) as resp:
+                    data = await resp.json()
+            code = data["code"]
+            # DMで送信（チャンネルには流さない）
+            await ctx.message.delete()
+            await ctx.author.send(
+                f"🔐 **AI Podcast Bot Web UI アクセスコード**\n"
+                f"```{code}```\n"
+                f"⏱ 有効期限: **10分** / 1回限り有効\n"
+                f"Web UI のログインページで入力してください。"
+            )
+        except Exception as e:
+            log.error(f"OTP生成失敗: {e}")
+            await ctx.author.send("⚠️ OTPの生成に失敗しました。バックエンドが起動しているか確認してください。")
+
     # ─── 切断イベント (自動再接続) ──────────────────────────
     async def on_voice_state_update(self, member, before, after):
         if member != self.user:

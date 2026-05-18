@@ -104,11 +104,28 @@ def build_app(bot, speech_queue, bgm_prefetch_q, status_queue) -> web.Applicatio
         except Exception as e:
             return web.json_response({"error": str(e)}, status=502)
 
-    app.router.add_get("/status",    get_status)
-    app.router.add_get("/speakers",  get_speakers)
-    app.router.add_get("/sse",       sse_status)
-    app.router.add_post("/talk",     post_talk)
-    app.router.add_post("/bgm",      post_bgm)
-    app.router.add_post("/stop",     post_stop)
+    # ─── OTP エンドポイント (Discord bot → Hono 検証用) ──────
+    async def post_otp_verify(request: web.Request):
+        """Hono からの OTP 検証リクエスト (127.0.0.1 のみ受付)"""
+        from otp_store import verify
+        body = await request.json()
+        code = str(body.get("code", ""))
+        ok   = verify(code)
+        return web.json_response({"ok": ok})
+
+    async def post_otp_generate(request: web.Request):
+        """Discord bot からの OTP 生成リクエスト (127.0.0.1 のみ受付)"""
+        from otp_store import generate
+        code = generate()
+        return web.json_response({"code": code})
+
+    app.router.add_get("/status",           get_status)
+    app.router.add_get("/speakers",         get_speakers)
+    app.router.add_get("/sse",              sse_status)
+    app.router.add_post("/talk",            post_talk)
+    app.router.add_post("/bgm",             post_bgm)
+    app.router.add_post("/stop",            post_stop)
+    app.router.add_post("/otp/verify",      post_otp_verify)
+    app.router.add_post("/otp/generate",    post_otp_generate)
 
     return app

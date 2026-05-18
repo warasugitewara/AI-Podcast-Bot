@@ -6,7 +6,7 @@ Wants=ai-podcast-backend.service
 [Service]
 Type=simple
 User=waras
-WorkingDirectory=/home/waras/ai-radio/frontend
+WorkingDirectory=/home/waras/ai-podcast/frontend
 ExecStart=/home/waras/.bun/bin/bun run src/index.ts
 Restart=on-failure
 RestartSec=5

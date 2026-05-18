@@ -6,7 +6,7 @@ Wants=docker.service
 [Service]
 Type=simple
 User=waras
-WorkingDirectory=/home/waras/ai-radio/backend
+WorkingDirectory=/home/waras/ai-podcast/backend
 ExecStart=/home/waras/ai-radio/backend/.venv/bin/python main.py
 Restart=on-failure
 RestartSec=10

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Podcast Bot — ログイン</title>
+  <style>
+    :root { --bg:#0f0f13; --surface:#1a1a24; --border:#2e2e42; --accent:#7c6af7; --text:#e8e8f0; --sub:#8888a8; --danger:#f76a6a; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif;
+           min-height:100vh; display:flex; align-items:center; justify-content:center; }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:16px;
+            padding:2.5rem 2rem; width:100%; max-width:380px; }
+    .logo { text-align:center; font-size:2.5rem; margin-bottom:.5rem; }
+    h1 { text-align:center; font-size:1.15rem; margin-bottom:.25rem; }
+    .sub { text-align:center; font-size:.82rem; color:var(--sub); margin-bottom:2rem; }
+    label { display:block; font-size:.82rem; color:var(--sub); margin-bottom:.4rem; }
+    input[type=text] { width:100%; background:var(--bg); border:1px solid var(--border);
+                       color:var(--text); border-radius:8px; padding:.65rem 1rem;
+                       font-size:1.5rem; letter-spacing:.4em; text-align:center;
+                       font-family:monospace; }
+    input[type=text]:focus { outline:2px solid var(--accent); }
+    button { width:100%; background:var(--accent); color:#fff; border:none;
+             border-radius:8px; padding:.7rem; font-size:.95rem; font-weight:600;
+             cursor:pointer; margin-top:1rem; transition:opacity .15s; }
+    button:hover { opacity:.85; }
+    .error { background:#2a1010; border:1px solid var(--danger); border-radius:8px;
+             color:var(--danger); font-size:.83rem; padding:.6rem .9rem; margin-bottom:1rem; display:none; }
+    .error.show { display:block; }
+    .hint { font-size:.78rem; color:var(--sub); text-align:center; margin-top:1.2rem; }
+    .hint code { color:var(--accent); background:var(--bg); padding:.1rem .3rem; border-radius:4px; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">🎙</div>
+  <h1>AI Podcast Bot</h1>
+  <p class="sub">Web UI コントロールパネル</p>
+
+  <div class="error show" id="err" style="display:none">
+    コードが無効か期限切れです。Discordで <code>!otp</code> を再実行してください。
+  </div>
+
+  <form method="POST" action="/auth/login">
+    <label for="code">Discord から届いた 6桁コード</label>
+    <input type="text" id="code" name="code"
+           maxlength="6" pattern="[0-9]{6}" inputmode="numeric"
+           placeholder="000000" autocomplete="off" required autofocus>
+    <button type="submit">ログイン</button>
+  </form>
+
+  <p class="hint">Discordで <code>!otp</code> と入力するとDMにコードが届きます</p>
+</div>
+
+<script>
+  // URLに ?error=1 があればエラー表示
+  if (new URLSearchParams(location.search).get("error")) {
+    document.getElementById("err").style.display = "block";
+  }
+  // 数字のみ入力を強制
+  document.getElementById("code").addEventListener("input", (e) => {
+    e.target.value = e.target.value.replace(/\D/g, "").slice(0, 6);
+  });
+</script>
+</body>
+</html>
