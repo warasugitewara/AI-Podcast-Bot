@@ -15,10 +15,12 @@ def _get(key: str, default: str = "") -> str:
     return os.getenv(key, default)
 
 # Discord
-DISCORD_TOKEN          = _require("DISCORD_TOKEN")
-DISCORD_GUILD_ID       = int(_require("DISCORD_GUILD_ID"))
+DISCORD_TOKEN            = _require("DISCORD_TOKEN")
+DISCORD_GUILD_ID         = int(_require("DISCORD_GUILD_ID"))
 DISCORD_VOICE_CHANNEL_ID = int(_require("DISCORD_VOICE_CHANNEL_ID"))
-DISCORD_TEXT_CHANNEL_ID  = int(_require("DISCORD_TEXT_CHANNEL_ID"))
+# TEXT_CHANNEL未設定時はVCのテキストチャット（同じID）を使用
+_text_ch = _get("DISCORD_TEXT_CHANNEL_ID", "0")
+DISCORD_TEXT_CHANNEL_ID  = int(_text_ch) if _text_ch and _text_ch != "0" else DISCORD_VOICE_CHANNEL_ID
 
 # LLM
 LLM_API_BASE  = _get("LLM_API_BASE", "https://api.openai.com/v1")
