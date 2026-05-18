@@ -59,6 +59,9 @@ _BGM_POOL = [
     "lo-fi chill music playlist official audio",
     "lofi beats cozy night official audio",
     "chillhop music cafe official audio",
+    "lofi beats rainy day official audio",
+    "lofi hip hop afternoon chill official",
+    "chill beats no copyright background official",
     # Jazz / Bossa Nova
     "smooth jazz background music official audio",
     "bossa nova cafe jazz official audio",
@@ -67,12 +70,17 @@ _BGM_POOL = [
     "bossa nova morning cafe official",
     "jazz piano relaxing official audio",
     "funky jazz instrumental official audio",
+    "acid jazz background music official",
+    "cool jazz relaxing instrumental official",
+    "latin jazz background music official audio",
     # Classical / Piano
     "classical piano background music official",
     "piano lofi beats relaxing official",
     "solo piano calm music official audio",
     "classical music focus study official",
     "piano ambient background official audio",
+    "baroque classical music studying official",
+    "piano impressionism music relax official",
     # Electronic / Synth
     "ambient electronic chill background music official",
     "synthwave lo-fi no copyright official audio",
@@ -81,11 +89,16 @@ _BGM_POOL = [
     "ambient electronic deep focus official",
     "vaporwave aesthetic music official audio",
     "future bass chill official audio",
+    "dreamwave synth background official audio",
+    "darksynth instrumental chill official",
+    "outrun synthwave music official audio",
     # Acoustic / Indie
     "acoustic guitar background chill official audio",
     "indie pop chill music official audio",
     "acoustic folk background music official",
     "indie acoustic guitar relax official",
+    "folk indie singer songwriter background official",
+    "coffeehouse acoustic background official audio",
     # Japanese / J-pop / City pop
     "city pop japanese style official audio",
     "j-pop official audio BGM",
@@ -94,29 +107,62 @@ _BGM_POOL = [
     "j-city pop chill official audio",
     "japanese jazz funk official audio",
     "japanese ambient music official",
+    "japanese indie pop background official audio",
+    "japanese funk groove official audio",
+    "japanese neo soul official audio",
+    "japanese shoegaze background official",
+    "japanese electronic ambient official audio",
     # Neo soul / R&B
     "neo soul background music official",
     "neo soul r&b instrumental official audio",
     "soul jazz background official audio",
+    "r&b smooth instrumental official audio",
+    "funk soul groove background official",
     # Upbeat / Pop
     "upbeat background music no copyright official",
     "happy background music official audio",
     "feel good indie pop official audio",
     "uplifting background music official",
+    "sunshine pop background official audio",
+    "summer pop background chill official",
     # Study / Focus
     "study music concentration official audio",
     "deep focus music for work official",
     "concentration music alpha waves official",
     "focus music productivity official audio",
+    "binaural beats focus study official",
     # Ambient / Nature
     "ambient music relaxing nature official audio",
     "calm ambient background official",
     "meditation ambient music official audio",
+    "space ambient background music official",
+    "dark ambient background official audio",
     # Electronic / Dance (mellow)
     "chillstep music official audio",
     "downtempo electronic music official",
     "trip hop background music official audio",
     "nu jazz electronic official audio",
+    "liquid dnb chill official audio",
+    "deep house background chill official",
+    # Reggae / Dub
+    "reggae background music chill official audio",
+    "dub reggae instrumental background official",
+    "roots reggae relaxing official audio",
+    # Blues / Soul
+    "blues background music chill official audio",
+    "electric blues instrumental official audio",
+    "blues jazz fusion background official",
+    # World Music
+    "world music background chill official audio",
+    "african jazz background official audio",
+    "celtic folk background music official",
+    "flamenco guitar background official audio",
+    "middle eastern ambient music official",
+    # Game / Anime BGM style
+    "video game background music chill official",
+    "rpg game ost background official audio",
+    "anime bgm instrumental relaxing official",
+    "game music ambient official audio",
 ]
 # シャッフル済みインデックスリスト（同じ曲が近くに来ないようにする）
 _bgm_pool_order: list[int] = []
@@ -151,42 +197,81 @@ _TOPIC_POOL = [
     "サイバーセキュリティの最新動向",
     "電気自動車と自動運転技術",
     "メタバース・VR/ARの現在と未来",
+    "スマートホームとIoT技術",
+    "量子コンピュータって何がすごいの？",
+    "3Dプリンタが変える製造業の未来",
     # サイエンス
     "宇宙と天文学の不思議な話",
     "最新の科学的発見や研究",
     "生物・動物の驚きの生態",
-    "量子コンピュータって何がすごいの？",
     "地球環境と気候変動の最前線",
+    "人体と医療の最新科学",
+    "深海の謎と未知の生物",
+    "睡眠と夢の科学",
+    "食べ物と脳の関係",
     # エンタメ・カルチャー
     "最近話題のアニメ・漫画",
     "音楽トレンドとおすすめアーティスト",
     "映画・ドラマのおすすめ・感想",
     "日本のポップカルチャーが世界に与える影響",
     "eスポーツの盛り上がりと大会情報",
+    "ストリーミングサービスが変えたエンタメ消費",
+    "ゲーム実況とVTuberカルチャー",
+    "インターネットミームと文化の広がり",
     # 生活・食
     "日本のB級グルメと世界のおもしろ料理",
     "旅行・観光のおすすめスポット",
     "健康的な生活習慣とフィットネストレンド",
     "コーヒー・お茶・飲み物のこだわり話",
+    "料理と科学の意外な関係",
+    "発酵食品と健康の話",
+    "都市農業と食の未来",
     # 社会・経済
     "仮想通貨・ブロックチェーンの現状",
     "働き方改革・リモートワークの変化",
     "若者のライフスタイルと消費トレンド",
     "サブスクサービスが変えた生活",
+    "SNSと社会の変化",
+    "Z世代とミレニアル世代の価値観の違い",
     # 面白・雑学
     "人類の歴史で最もインパクトがあった発明",
     "10年後の未来はどうなっている？",
     "もし〇〇が存在しなかったら…という妄想話",
     "世界の奇妙な法律・文化の違い",
-    "睡眠と夢の科学",
     "言語と方言の面白い話",
+    "色と人間の心理の関係",
+    "音楽が気分に与える科学的な影響",
+    "都市伝説と実際の科学的説明",
     # スポーツ
     "サッカー・野球・バスケの最新情報",
     "日本のスポーツ界のホットな話題",
+    "オリンピックとスポーツの歴史",
+    "eスポーツは本当にスポーツか？という議論",
+    # 心理・人間関係
+    "心理学から見た人間の行動パターン",
+    "コミュニケーションと人間関係のコツ",
+    "ストレスと現代社会の生き方",
+    "創造性と発想力を高める方法",
+    # 音楽・芸術
+    "音楽の歴史と現代音楽のつながり",
+    "プロデューサーとアーティストの役割の変化",
+    "街と音楽のカルチャーの関係",
+    # 日本文化
+    "日本の伝統文化が現代に与える影響",
+    "祭りと地域コミュニティの話",
+    "日本語の面白い言葉・表現の話",
 ]
 
-def pick_random_topic() -> str:
-    """毎回異なるジャンルからランダムにトピックを選ぶ"""
+def pick_random_topic(avoid: list[str] | None = None) -> str:
+    """毎回異なるジャンルからランダムにトピックを選ぶ。avoid リストの話題は優先的に除外。"""
+    if avoid:
+        avoid_lower = {t.lower() for t in avoid}
+        candidates = [
+            t for t in _TOPIC_POOL
+            if not any(t.lower() in av or av in t.lower() for av in avoid_lower)
+        ]
+        if candidates:
+            return random.choice(candidates)
     return random.choice(_TOPIC_POOL)
 
 
@@ -226,6 +311,7 @@ def _build_dialogue_system(chars: list, has_context: bool) -> str:
         f"  - セリフは自然な日本語で書く。口癖は全体で1〜2回まで、毎回同じ表現を繰り返さない。\n"
         f"  - 会話の中盤でひとつ意外な視点や豆知識・エピソードを盛り込む。\n"
         f"  - 全体として「起承転結」の流れを作り、聴衆が飽きないよう盛り上がりのピークを作る。\n"
+        f"  - 提供された[FACTS]ブロックの情報を改変・誇張しない。感情・意見・ツッコミはOKだが、新しい事実を創作しない。\n"
         f"\n{ctx_rule}"
     )
 
@@ -268,16 +354,22 @@ async def generate_dialogue(
         return [], ""
 
     from services.character_manager import character_manager
+    from services.program_memory import program_memory as _pm
     if chars is None:
         chars = character_manager.active()
 
-    # トピック未指定→ランダム選択（AIニュース固定を解消）
-    resolved_topic = topic.strip() or pick_random_topic()
+    # トピック未指定→直近の話題を避けてランダム選択
+    resolved_topic = topic.strip() or pick_random_topic(avoid=_pm.recent_topics)
     user_content = f"テーマ: {resolved_topic}"
     if memory_ctx:
         user_content += f"\n【番組コンテキスト】\n{memory_ctx}"
+    # 直近10件のトピックを「避けること」として追加指示
+    avoid_hint = _pm.avoid_topics_hint()
+    if avoid_hint:
+        user_content += f"\n【注意】次の話題と内容が被らないようにする: {avoid_hint}"
     if context:
-        user_content += f"\n【参考情報】{context}"
+        # 事実ブロック形式で渡す（LLMに改変させない）
+        user_content += f"\n[FACTS]\n{context}\n[/FACTS]\n※上記の事実のみを使用し、新しい事実を創作しない。"
 
     log.info(f"対話生成: topic={resolved_topic!r} cast={[c.name for c in chars]}")
     _inc_counter()

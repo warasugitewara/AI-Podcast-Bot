@@ -112,21 +112,50 @@ def _trim_title(title: str, max_len: int = 30) -> str:
 
 
 async def _resolve_query(job: dict) -> str:
-    """ジョブからBGMクエリ/URLを決定する"""
+    """ジョブからBGMクエリ/URLを決定する（マルチソース・アンチリピート対応）"""
     q = job.get("query", "").strip()
     if q:
         return q  # ユーザー指定を最優先
 
-    if random.random() < 0.3:
+    from services.program_memory import program_memory
+
+    r = random.random()
+
+    # 25%: YouTube Music トレンド JP
+    if r < 0.25:
         try:
             from services.ytmusic_service import pick_trending_url
             url = await pick_trending_url(country="JP")
-            if url:
+            if url and not program_memory.is_recent_bgm_query(url):
+                program_memory.add_bgm_query(url)
                 return url
         except Exception as e:
-            log.debug(f"トレンド取得スキップ: {e}")
+            log.debug(f"JPトレンド取得スキップ: {e}")
 
-    return pick_bgm_query()
+    # 25%〜40%: YouTube Music トレンド US / KR ランダム
+    elif r < 0.40:
+        try:
+            from services.ytmusic_service import pick_trending_url
+            country = random.choice(["US", "KR", "GB"])
+            url = await pick_trending_url(country=country)
+            if url and not program_memory.is_recent_bgm_query(url):
+                program_memory.add_bgm_query(url)
+                log.info(f"海外トレンド選曲 ({country})")
+                return url
+        except Exception as e:
+            log.debug(f"海外トレンド取得スキップ: {e}")
+
+    # 残り60%: プリセットプール（最近使用済みを除外・最大10回試す）
+    for _ in range(10):
+        candidate = pick_bgm_query()
+        if not program_memory.is_recent_bgm_query(candidate):
+            program_memory.add_bgm_query(candidate)
+            return candidate
+
+    # フォールバック（全部最近使用済みの場合はそのまま使う）
+    fallback = pick_bgm_query()
+    program_memory.add_bgm_query(fallback)
+    return fallback
 
 
 class BgmWorker:

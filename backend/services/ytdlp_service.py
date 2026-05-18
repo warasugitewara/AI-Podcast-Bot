@@ -5,6 +5,7 @@ YouTube URL / YouTube Music URL の直接ダウンロードにも対応。
 """
 import asyncio
 import logging
+import random
 import re
 from pathlib import Path
 import yt_dlp
@@ -168,31 +169,23 @@ async def search_and_download(query: str, max_duration: int = 600) -> tuple[Path
             log.warning(f"検索結果なし: {query!r}")
             return None, ""
 
-        # 候補をフィルタリングして最初の良いものを選ぶ（最近再生済みも除外）
-        chosen = None
-        for entry in entries:
-            if not entry:
-                continue
-            vid = entry.get("id", "")
-            if _is_bad_entry(entry):
-                continue
-            if _is_recently_played(vid):
-                log.debug(f"最近再生済みのためスキップ: {entry.get('title')!r}")
-                continue
-            chosen = entry
-            break
+        # 候補をフィルタリング（最近再生済み除外）してランダムに選ぶ
+        good_fresh = [
+            e for e in entries
+            if e and not _is_bad_entry(e) and not _is_recently_played(e.get("id", ""))
+        ]
+        good_any = [e for e in entries if e and not _is_bad_entry(e)]
 
-        if chosen is None:
-            # recently_played を無視して再トライ（フィルターのみ適用）
-            for entry in entries:
-                if entry and not _is_bad_entry(entry):
-                    chosen = entry
-                    break
-
-        if chosen is None:
-            # 全部弾かれた場合は最初の候補を使う（最終手段）
-            chosen = entries[0]
-            log.warning(f"全候補がフィルター対象。最初の結果を使用: {chosen.get('title')!r}")
+        if good_fresh:
+            chosen = random.choice(good_fresh)
+        elif good_any:
+            chosen = random.choice(good_any)
+            log.debug("全候補が最近再生済み。フィルター通過候補からランダム選択")
+        elif entries:
+            chosen = random.choice([e for e in entries if e] or [entries[0]])
+            log.warning(f"全候補がフィルター対象。ランダムで選択: {chosen.get('title')!r}")
+        else:
+            return None, ""
 
         video_url = chosen.get("url") or f"https://www.youtube.com/watch?v={chosen['id']}"
         log.info(f"BGM選択: {chosen.get('title')!r} (フィルター通過)")
