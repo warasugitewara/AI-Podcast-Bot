@@ -18,7 +18,7 @@ app.route("/events", sseRoutes(BACKEND_URL));
 // ─── API プロキシ ────────────────────────────────────────
 app.route("/api", apiRoutes(BACKEND_URL));
 
-console.log(`🎙  AIラジオ Web UI: http://localhost:${PORT}`);
+console.log(`🎙  AI Podcast Bot Web UI: http://localhost:${PORT}`);
 
 export default {
   port: PORT,

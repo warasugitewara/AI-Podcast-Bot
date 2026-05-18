@@ -9,7 +9,7 @@ log = logging.getLogger("llm")
 
 _client = AsyncOpenAI(base_url=LLM_API_BASE, api_key=LLM_API_KEY)
 
-RADIO_SYSTEM_PROMPT = """あなたはAIラジオのDJです。
+RADIO_SYSTEM_PROMPT = """あなたはAI Podcast BotのDJです。
 明るく自然な日本語で、2〜4文程度のトークを生成してください。
 提供されたコンテキスト情報（ニュース・株価など）を必ず参考にし、
 独自に事実を作り出すことは絶対に禁止です。"""

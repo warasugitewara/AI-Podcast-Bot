@@ -30,9 +30,9 @@ VOICEVOX_URL        = _get("VOICEVOX_URL", "http://localhost:50021")
 VOICEVOX_SPEAKER_ID = int(_get("VOICEVOX_SPEAKER_ID", "3"))
 
 # パス
-DATA_DIR   = Path(_get("DATA_DIR",   "/mnt/data/ai-radio/data"))
-LOGS_DIR   = Path(_get("LOGS_DIR",   "/mnt/data/ai-radio/logs"))
-CONFIG_DIR = Path(_get("CONFIG_DIR", "/mnt/data/ai-radio/config"))
+DATA_DIR   = Path(_get("DATA_DIR",   "/mnt/data/ai-podcast/data"))
+LOGS_DIR   = Path(_get("LOGS_DIR",   "/mnt/data/ai-podcast/logs"))
+CONFIG_DIR = Path(_get("CONFIG_DIR", "/mnt/data/ai-podcast/config"))
 
 BGM_CACHE_DIR = DATA_DIR / "bgm_cache"
 TTS_CACHE_DIR = DATA_DIR / "tts_cache"

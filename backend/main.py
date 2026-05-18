@@ -1,5 +1,5 @@
 """
-AIラジオ バックエンド エントリーポイント
+AI Podcast Bot バックエンド エントリーポイント
 asyncio.Queue x4 + ワーカー起動 + Discord Bot + aiohttp APIサーバー
 """
 import asyncio

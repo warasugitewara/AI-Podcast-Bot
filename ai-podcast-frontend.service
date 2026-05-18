@@ -1,7 +1,7 @@
 [Unit]
-Description=AIラジオ フロントエンド (Bun/Hono)
-After=ai-radio-backend.service
-Wants=ai-radio-backend.service
+Description=AI Podcast Bot フロントエンド (Bun/Hono)
+After=ai-podcast-backend.service
+Wants=ai-podcast-backend.service
 
 [Service]
 Type=simple
