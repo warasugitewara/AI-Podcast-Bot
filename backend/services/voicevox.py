@@ -11,6 +11,10 @@ from config import VOICEVOX_URL, VOICEVOX_SPEAKER_ID, TTS_CACHE_DIR
 
 log = logging.getLogger("voicevox")
 
+# VOICEVOXはシングルスレッド処理のため並列リクエストで500エラーが発生する。
+# モジュールレベルのセマフォで全リクエストを直列化する。
+_vv_sem = asyncio.Semaphore(1)
+
 
 class VoicevoxService:
     def __init__(self, url: str = VOICEVOX_URL, speaker_id: int = VOICEVOX_SPEAKER_ID):
@@ -36,27 +40,28 @@ class VoicevoxService:
             log.debug(f"TTSキャッシュヒット: {cached.name}")
             return cached
 
-        async with aiohttp.ClientSession() as session:
-            # Step1: audio_query
-            async with session.post(
-                f"{self.url}/audio_query",
-                params={"text": text, "speaker": sid},
-            ) as resp:
-                resp.raise_for_status()
-                query = await resp.json()
+        async with _vv_sem:
+            async with aiohttp.ClientSession() as session:
+                # Step1: audio_query
+                async with session.post(
+                    f"{self.url}/audio_query",
+                    params={"text": text, "speaker": sid},
+                ) as resp:
+                    resp.raise_for_status()
+                    query = await resp.json()
 
-            query["speedScale"] = speed
-            query["pitchScale"] = pitch
+                query["speedScale"] = speed
+                query["pitchScale"] = pitch
 
-            # Step2: synthesis
-            async with session.post(
-                f"{self.url}/synthesis",
-                params={"speaker": sid},
-                json=query,
-                headers={"Content-Type": "application/json"},
-            ) as resp:
-                resp.raise_for_status()
-                wav_data = await resp.read()
+                # Step2: synthesis
+                async with session.post(
+                    f"{self.url}/synthesis",
+                    params={"speaker": sid},
+                    json=query,
+                    headers={"Content-Type": "application/json"},
+                ) as resp:
+                    resp.raise_for_status()
+                    wav_data = await resp.read()
 
         cached.write_bytes(wav_data)
         log.info(f"TTS生成完了: {len(text)}文字 → {cached.name}")

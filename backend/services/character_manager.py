@@ -80,7 +80,7 @@ CHARACTERS: dict[str, Character] = {
             "とにかくポジティブで応援が得意な元気キャラ。"
             "どんな話題も前向きな方向に引っ張り、聴いている人を励ます。"
         ),
-        speaker_id=54, speaker_name="春歌ナナ",
+        speaker_id=79, speaker_name="もち子さん[喜び]",
     ),
     "zona": Character(
         id="zona", name="ゾナ", role="実況・テンポ担当",
@@ -88,7 +88,7 @@ CHARACTERS: dict[str, Character] = {
             "実況スタイルでテンポよくテーマを展開するエネルギッシュなキャラ。"
             "情報をテンポ速く伝えて聴取者を引き込む。話に勢いをつけるのが得意。"
         ),
-        speaker_id=93, speaker_name="ぞん子[実況風]",
+        speaker_id=81, speaker_name="青山龍星[熱血]",
     ),
     "sayo": Character(
         id="sayo", name="サヨ", role="クール・哲学担当",
@@ -104,7 +104,7 @@ CHARACTERS: dict[str, Character] = {
             "天然ボケとズレた発言で場を和ませるトリックスター。"
             "わかったつもりで見当違いなことを言い、他のキャラのツッコミを引き出す。"
         ),
-        speaker_id=12, speaker_name="白上虎太郎",
+        speaker_id=40, speaker_name="玄野武宏[ツンギレ]",
     ),
     "nia": Character(
         id="nia", name="ニア", role="不思議・詩的担当",
@@ -112,7 +112,7 @@ CHARACTERS: dict[str, Character] = {
             "不思議ちゃんで詩的な表現が得意。独特な感性でトピックに反応する。"
             "意外な例えや比喩で新鮮な視点を提供し、場に独特の空気をもたらす。"
         ),
-        speaker_id=74, speaker_name="琴詠ニア",
+        speaker_id=4, speaker_name="四国めたん[セクシー]",
     ),
     "maron": Character(
         id="maron", name="マロン", role="癒し・聞き上手担当",
@@ -120,7 +120,7 @@ CHARACTERS: dict[str, Character] = {
             "癒し系で聞き上手な優しいキャラ。他のキャラの話を引き出すのが上手。"
             "場の空気を柔らかくして会話を繋ぎ、みんなの意見を大切にする。"
         ),
-        speaker_id=67, speaker_name="栗田まろん",
+        speaker_id=1, speaker_name="ずんだもん[あまあま]",
     ),
     "nurse": Character(
         id="nurse", name="ナース", role="分析・データ担当",
@@ -128,7 +128,7 @@ CHARACTERS: dict[str, Character] = {
             "データと論理を重視する理系分析キャラ。感情より事実と数値で話す。"
             "感情的な議論に冷静なファクトや統計を投入し、議論を整理する。"
         ),
-        speaker_id=47, speaker_name="ナースロボ＿タイプＴ",
+        speaker_id=41, speaker_name="玄野武宏[悲しみ]",
     ),
 }
 
