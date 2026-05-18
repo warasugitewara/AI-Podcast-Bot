@@ -85,7 +85,20 @@ class SpeechWorker:   # 後方互換でクラス名は維持
                 if remaining > 0:
                     log.info(f"クールタイム待機: {remaining:.0f}秒")
                     await self._push_status("cooldown", f"{remaining:.0f}秒")
-                    await asyncio.sleep(remaining)
+
+                    # アイドル中ならBGMで無音を埋める
+                    if self.idle_event.is_set():
+                        log.info("クールタイム中 → BGMを自動挿入")
+                        await self._trigger_music("", label="BGM（クールタイム中）")
+
+                    # クールタイムを1秒ごとにカウントダウン更新
+                    deadline = time.monotonic() + remaining
+                    while True:
+                        left = deadline - time.monotonic()
+                        if left <= 0:
+                            break
+                        await self._push_status("cooldown", f"{left:.0f}秒")
+                        await asyncio.sleep(min(5.0, left))
 
                 # 生成前にビジーマーク（race condition防止）
                 self.idle_event.clear()

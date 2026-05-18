@@ -46,6 +46,17 @@
     #status-detail{font-size:.82rem;color:var(--sub);margin-left:auto}
     .pulse{animation:pulse 1.5s infinite}
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+    /* クールタイムバー */
+    #cooldown-wrap{margin-top:.75rem;display:none}
+    #cooldown-label{font-size:.75rem;color:var(--sub);margin-bottom:.3rem;display:flex;justify-content:space-between}
+    #cooldown-bar-bg{height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+    #cooldown-bar{height:100%;background:var(--warn);border-radius:3px;transition:width 1s linear}
+    /* フェーズパイプライン */
+    #phase-row{display:flex;gap:.5rem;margin-top:.75rem;flex-wrap:wrap}
+    .phase-chip{font-size:.72rem;padding:.2rem .6rem;border-radius:99px;
+                background:var(--border);color:var(--sub);border:1px solid var(--border);white-space:nowrap}
+    .phase-chip.active{background:var(--accent)25;border-color:var(--accent);color:var(--accent)}
+    .phase-chip.done  {background:#1a3a2a;border-color:#2a5a3a;color:var(--accent2)}
 
     /* ── Buttons ── */
     button{cursor:pointer;border:none;border-radius:8px;padding:.55rem 1rem;
@@ -154,6 +165,20 @@
       <span id="status-text">待機中</span>
       <span id="status-detail"></span>
     </div>
+    <!-- クールタイムバー -->
+    <div id="cooldown-wrap">
+      <div id="cooldown-label"><span>⏳ 次回生成まで</span><span id="cooldown-sec">--</span></div>
+      <div id="cooldown-bar-bg"><div id="cooldown-bar" style="width:0%"></div></div>
+    </div>
+    <!-- フェーズチップ -->
+    <div id="phase-row">
+      <span class="phase-chip" id="chip-cooldown">⏳ クールタイム</span>
+      <span class="phase-chip" id="chip-generating">💭 台本生成</span>
+      <span class="phase-chip" id="chip-tts">🗣 音声生成</span>
+      <span class="phase-chip" id="chip-bgm">🔍 BGM取得</span>
+      <span class="phase-chip" id="chip-playing">▶ 再生中</span>
+      <span id="ep-count" class="tag" style="margin-left:auto" title="エピソード数">Ep.0</span>
+    </div>
   </div>
 
   <!-- ── 左カラム ── -->
@@ -243,10 +268,12 @@
 <script>
 // ─── State ────────────────────────────────────────────────────
 const state = {
-  cast: null,      // current cast info
-  casts: {},       // all casts
-  trending: null,  // trending songs
+  cast: null,
+  casts: {},
+  trending: null,
   trendingOpen: false,
+  cooldownTotal: 0,   // クールタイム初期値（秒）
+  cooldownTimer: null,
 };
 
 // ─── SSE ──────────────────────────────────────────────────────
@@ -260,15 +287,63 @@ evtSrc.addEventListener("status", e => {
   appendLog(d.event, d.detail ?? "");
 });
 
-// ─── ステータス表示 ────────────────────────────────────────
+// ─── フェーズチップ管理 ────────────────────────────────────────
+const PHASE_MAP = {
+  cooldown:      "chip-cooldown",
+  generating:    "chip-generating",
+  tts_generating:"chip-tts",
+  bgm_fetching:  "chip-bgm",
+  bgm_ready:     "chip-bgm",
+  playing:       "chip-playing",
+};
+function setPhase(ev) {
+  const chipId = PHASE_MAP[ev];
+  document.querySelectorAll(".phase-chip").forEach(c => {
+    c.classList.remove("active","done");
+    if (c.id === chipId) c.classList.add("active");
+  });
+}
+
+// ─── クールタイムバー ─────────────────────────────────────────
+let _cdInterval = null;
+function startCooldownBar(totalSec) {
+  state.cooldownTotal = totalSec;
+  const wrap = document.getElementById("cooldown-wrap");
+  wrap.style.display = "block";
+  const bar  = document.getElementById("cooldown-bar");
+  const sec  = document.getElementById("cooldown-sec");
+  let left   = totalSec;
+  bar.style.width = "100%";
+  sec.textContent = `${left}秒`;
+  if (_cdInterval) clearInterval(_cdInterval);
+  _cdInterval = setInterval(() => {
+    left = Math.max(0, left - 1);
+    const pct = (left / totalSec) * 100;
+    bar.style.width = pct + "%";
+    sec.textContent = `${left}秒`;
+    if (left <= 0) {
+      clearInterval(_cdInterval);
+      wrap.style.display = "none";
+    }
+  }, 1000);
+}
+
+// ─── ステータス表示 ────────────────────────────────────────────
 const STATUS_MAP = {
-  connected:    ["🟢","接続済み"],   idle:          ["⏸","待機中"],
-  playing:      ["▶️","再生中"],     generating:    ["💭","台本生成中"],
-  tts_generating:["🗣","音声生成中"], bgm_fetching:  ["🔍","音楽取得中"],
-  bgm_ready:    ["✅","音楽準備完了"],bgm_failed:    ["❌","音楽取得失敗"],
-  cooldown:     ["⏳","クールタイム"],rate_limited:  ["🚦","レート制限"],
-  paused_empty_vc:["⏸","VC空室停止"],vc_empty:      ["👥","空室検知"],
-  daily_limit:  ["🔴","日次上限"],
+  connected:       ["🟢","接続済み"],
+  idle:            ["⏸","待機中"],
+  playing:         ["▶️","再生中"],
+  generating:      ["💭","台本生成中"],
+  tts_generating:  ["🗣","音声生成中"],
+  bgm_fetching:    ["🔍","音楽取得中"],
+  bgm_ready:       ["✅","音楽準備完了"],
+  bgm_failed:      ["❌","音楽取得失敗"],
+  cooldown:        ["⏳","クールタイム"],
+  rate_limited:    ["🚦","レート制限"],
+  paused_empty_vc: ["⏸","VC空室停止"],
+  vc_empty:        ["👥","空室検知"],
+  daily_limit:     ["🔴","日次上限"],
+  music_queuing:   ["🎵","音楽キュー中"],
 };
 function updateStatus(ev, detail) {
   const [icon, text] = STATUS_MAP[ev] ?? ["⚙️", ev.replace(/_/g," ")];
@@ -277,6 +352,22 @@ function updateStatus(ev, detail) {
   tEl.textContent = text;
   tEl.className = ["playing","tts_generating","bgm_fetching","generating"].includes(ev) ? "pulse" : "";
   document.getElementById("status-detail").textContent = detail;
+  setPhase(ev);
+
+  if (ev === "cooldown") {
+    const secs = parseInt(detail, 10);
+    if (!isNaN(secs) && secs > 0) {
+      // 前回のタイマーよりも値が大きければ再スタート（新しいクールタイム開始）
+      if (secs > (state.cooldownTotal * 0.9 + 5)) {
+        startCooldownBar(secs);
+      }
+    }
+  } else if (ev === "idle" || ev === "playing") {
+    // 再生始まったらバーを消す
+    document.getElementById("cooldown-wrap").style.display = "none";
+    if (_cdInterval) { clearInterval(_cdInterval); _cdInterval = null; }
+    state.cooldownTotal = 0;
+  }
 }
 
 // ─── API ───────────────────────────────────────────────────────

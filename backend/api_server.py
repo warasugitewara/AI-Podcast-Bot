@@ -11,7 +11,7 @@ from aiohttp import web
 log = logging.getLogger("api_server")
 
 
-def build_app(bot, speech_queue, tts_queue, bgm_prefetch_q, music_request_queue, status_queue) -> web.Application:
+def build_app(bot, speech_queue, tts_queue, bgm_prefetch_q, music_request_queue, status_queue, scheduler=None) -> web.Application:
     app = web.Application()
 
     # ─── SSE: ステータスストリーミング ──────────────────────
@@ -101,6 +101,12 @@ def build_app(bot, speech_queue, tts_queue, bgm_prefetch_q, music_request_queue,
 
     async def get_status(request: web.Request):
         """現在の状態をスナップショットで返す"""
+        import time
+        cooldown_remaining = 0
+        if scheduler is not None:
+            elapsed   = time.monotonic() - scheduler._last_gen_time
+            remaining = scheduler._backoff - elapsed
+            cooldown_remaining = max(0, round(remaining))
         return web.json_response({
             "is_playing":          bot.is_playing(),
             "broadcast_active":    bot.broadcast_active.is_set(),
@@ -108,6 +114,8 @@ def build_app(bot, speech_queue, tts_queue, bgm_prefetch_q, music_request_queue,
             "tts_queue":           tts_queue.qsize(),
             "bgm_queue":           bgm_prefetch_q.qsize(),
             "music_request_queue": music_request_queue.qsize(),
+            "cooldown_remaining":  cooldown_remaining,
+            "episode_count":       getattr(scheduler, "_episode_count", 0),
         })
 
     async def get_queue(request: web.Request):

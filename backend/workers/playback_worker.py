@@ -63,7 +63,7 @@ class PlaybackWorker:
         self._done_event.clear()
         source = discord.FFmpegPCMAudio(str(wav_path))
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def _after(err):
             if err:

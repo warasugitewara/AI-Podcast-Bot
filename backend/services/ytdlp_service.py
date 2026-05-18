@@ -50,8 +50,8 @@ def _cache_path_for_id(video_id: str) -> Path | None:
     return None
 
 
-async def download_url(url: str, max_duration: int = 600) -> Path | None:
-    """YouTube / YouTube Music の URL を直接ダウンロード"""
+async def download_url(url: str, max_duration: int = 600) -> tuple[Path | None, str]:
+    """YouTube / YouTube Music の URL を直接ダウンロード。(path, title) を返す。"""
     opts = {
         **YDL_OPTS_BASE,
         "match_filter": yt_dlp.utils.match_filter_func(f"duration < {max_duration}"),
@@ -67,18 +67,19 @@ async def download_url(url: str, max_duration: int = 600) -> Path | None:
     try:
         info = await asyncio.to_thread(_run)
         if not info:
-            return None
+            return None, ""
         cached = _cache_path_for_id(info["id"])
+        title  = info.get("title", "")
         if cached:
-            log.info(f"URLダウンロード完了: {info.get('title', '?')} → {cached.name}")
-            return cached
+            log.info(f"URLダウンロード完了: {title!r} → {cached.name}")
+            return cached, title
     except Exception as e:
         log.error(f"URLダウンロード失敗 ({url}): {e}")
-    return None
+    return None, ""
 
 
-async def search_and_download(query: str, max_duration: int = 600) -> Path | None:
-    """クエリでYouTube検索し、最初にヒットした曲をダウンロードしてPathを返す。"""
+async def search_and_download(query: str, max_duration: int = 600) -> tuple[Path | None, str]:
+    """クエリでYouTube検索し、最初にヒットした曲をダウンロードして (path, title) を返す。"""
     search_url = f"ytsearch1:{query}"
     opts = {
         **YDL_OPTS_BASE,
@@ -95,18 +96,19 @@ async def search_and_download(query: str, max_duration: int = 600) -> Path | Non
     try:
         info = await asyncio.to_thread(_run)
         if not info:
-            return None
+            return None, ""
         cached = _cache_path_for_id(info["id"])
+        title  = info.get("title", query)
         if cached:
-            log.info(f"BGMダウンロード完了: {info.get('title','?')} → {cached.name}")
-            return cached
+            log.info(f"BGMダウンロード完了: {title!r} → {cached.name}")
+            return cached, title
     except Exception as e:
         log.error(f"yt-dlp失敗 ({query}): {e}")
-    return None
+    return None, ""
 
 
-async def get_bgm(query_or_url: str) -> Path | None:
-    """URLなら直接ダウンロード、キーワードなら検索ダウンロード。キャッシュ確認付き。"""
+async def get_bgm(query_or_url: str) -> tuple[Path | None, str]:
+    """URLなら直接DL、キーワードなら検索DL。キャッシュ確認付き。(path, title) を返す。"""
     s = query_or_url.strip()
 
     if is_youtube_url(s):
@@ -117,6 +119,6 @@ async def get_bgm(query_or_url: str) -> Path | None:
     for p in BGM_CACHE_DIR.glob("*.opus"):
         if p.stem.startswith(key):
             log.debug(f"BGMキャッシュ使用: {p.name}")
-            return p
+            return p, s   # タイトル不明→クエリ文字列で代用
     return await search_and_download(s)
 

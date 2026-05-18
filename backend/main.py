@@ -56,7 +56,7 @@ async def main():
     # ─── API サーバー ─────────────────────────────────────
     from api_server import build_app
     app    = build_app(bot, speech_queue, tts_queue, bgm_prefetch_q,
-                       music_request_queue, status_queue)
+                       music_request_queue, status_queue, speech)
     runner = web.AppRunner(app)
     await runner.setup()
     site   = web.TCPSite(runner, "127.0.0.1", BACKEND_API_PORT)
