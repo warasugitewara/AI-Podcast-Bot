@@ -26,6 +26,7 @@ import time
 from services.news_fetcher import build_context
 from services.llm import generate_talk, generate_dialogue, pick_bgm_query, get_daily_usage
 from services.character_manager import character_manager
+from services.program_memory import program_memory
 from config import NIM_MIN_INTERVAL_SEC
 
 log = logging.getLogger("content_scheduler")
@@ -245,7 +246,10 @@ class SpeechWorker:   # 後方互換でクラス名は維持
         try:
             context = await build_context()
             chars   = character_manager.active()
-            lines   = await generate_dialogue(topic=topic, context=context, chars=chars)
+            memory_ctx = program_memory.context_summary()
+            lines, resolved_topic = await generate_dialogue(
+                topic=topic, context=context, chars=chars, memory_ctx=memory_ctx
+            )
 
             if not lines:
                 # 日次上限到達またはパース失敗 → 音楽にフォールバック（LLMコール節約）
@@ -272,6 +276,8 @@ class SpeechWorker:   # 後方互換でクラス名は維持
                         "text": line["text"], "speaker_id": sid,
                         "speed": speed, "pitch": pitch,
                     })
+                # 番組メモリに今回のトピックを記録
+                program_memory.add_topic(resolved_topic)
                 log.info(f"対話 {len(lines)}行 → tts_queue "
                          f"cast={character_manager.cast_name} "
                          f"{[c.name for c in chars]}")

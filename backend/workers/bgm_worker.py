@@ -18,7 +18,8 @@ log = logging.getLogger("bgm_worker")
 _voicevox = VoicevoxService()   # シングルトン（毎回newしない）
 
 # ─── キャラクター別アナウンステンプレート ─────────────────────
-_ANNOUNCE = {
+# 理由なし版
+_ANNOUNCE: dict[str, list[str]] = {
     "haru": [
         "次の曲は「{title}」です！",
         "お届けするのは「{title}」！どうぞ！",
@@ -30,18 +31,18 @@ _ANNOUNCE = {
         "「{title}」、どうぞ。",
     ],
     "yuki": [
-        "「{title}」でも流しときます。",
-        "まあ「{title}」でも聴けば？",
-        "次は「{title}」。文句言わないで。",
+        "「{title}」を流します。",
+        "次は「{title}」。",
+        "「{title}」でも聴いてください。",
     ],
     "sora": [
-        "わーい、「{title}」だっちゃ！なのだ！",
-        "え、「{title}」！？聴いてみよーなのだ！",
-        "「{title}」が来たのだー！",
+        "次は「{title}」！",
+        "「{title}」、聴いてみましょう！",
+        "お次は「{title}」です！",
     ],
     "rei": [
         "それでは「{title}」をお届けします。",
-        "次の曲は「{title}」ということですね。",
+        "次の曲は「{title}」です。",
         "「{title}」です。ごゆっくりどうぞ。",
     ],
 }
@@ -50,18 +51,55 @@ _ANNOUNCE_DEFAULT = [
     "お届けするのは「{title}」。",
 ]
 
+# 理由あり版
+_ANNOUNCE_REASON: dict[str, list[str]] = {
+    "haru": [
+        "{reason}「{title}」をどうぞ！",
+        "{reason}次は「{title}」です！",
+    ],
+    "ao": [
+        "{reason}「{title}」をお届けします。",
+        "{reason}次は「{title}」です。",
+    ],
+    "yuki": [
+        "{reason}「{title}」を流します。",
+        "{reason}「{title}」にしました。",
+    ],
+    "sora": [
+        "{reason}「{title}」にしましょう！",
+        "{reason}「{title}」はどうですか！",
+    ],
+    "rei": [
+        "{reason}「{title}」をお届けします。",
+        "{reason}「{title}」です。ごゆっくりどうぞ。",
+    ],
+}
+_ANNOUNCE_REASON_DEFAULT = [
+    "{reason}「{title}」をお届けします。",
+    "{reason}次は「{title}」です。",
+]
+
 
 def _make_announce_text(title: str) -> tuple[str, int | None]:
     """現在アクティブなMCキャラクターのアナウンス文とspeaker_idを返す"""
     from services.character_manager import character_manager
+    from services.program_memory import program_memory
     chars = character_manager.active()
     if not chars:
-        return random.choice(_ANNOUNCE_DEFAULT).format(title=title), None
+        return random.choice(_ANNOUNCE_DEFAULT).format(title=_trim_title(title)), None
 
     # MC/進行役を優先、なければ最初のキャラ
     mc = next((c for c in chars if "MC" in c.role or "進行" in c.role), chars[0])
-    templates = _ANNOUNCE.get(mc.id, _ANNOUNCE_DEFAULT)
-    text = random.choice(templates).format(title=_trim_title(title))
+    trimmed = _trim_title(title)
+    reason  = program_memory.bgm_reason()
+
+    if reason:
+        templates = _ANNOUNCE_REASON.get(mc.id, _ANNOUNCE_REASON_DEFAULT)
+        text = random.choice(templates).format(title=trimmed, reason=reason)
+    else:
+        templates = _ANNOUNCE.get(mc.id, _ANNOUNCE_DEFAULT)
+        text = random.choice(templates).format(title=trimmed)
+
     return text, mc.speaker_id
 
 
@@ -121,6 +159,10 @@ class BgmWorker:
                 bgm_path, title = await get_bgm(query, user_request=user_request)
 
                 if bgm_path and enqueue:
+                    # BGMジャンルを番組メモリに記録
+                    from services.program_memory import program_memory
+                    program_memory.add_genre(query)
+
                     # ① アナウンスTTSを先にWAV生成してからキューへ
                     if title:
                         await self._enqueue_announce(title)

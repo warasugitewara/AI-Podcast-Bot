@@ -257,14 +257,15 @@ async def generate_dialogue(
     topic: str,
     context: str = "",
     chars: list | None = None,
-) -> list[dict]:
+    memory_ctx: str = "",
+) -> tuple[list[dict], str]:
     """
     キャラクター対話台本を生成。
-    戻り値: [{"speaker": "ハル", "text": "..."}, ...]
-    日次上限超過時は空リストを返す（呼び出し側でBGMにフォールバック）。
+    戻り値: ([{"speaker": "ハル", "text": "..."}, ...], resolved_topic)
+    日次上限超過時は ([], "") を返す（呼び出し側でBGMにフォールバック）。
     """
     if not _can_request():
-        return []
+        return [], ""
 
     from services.character_manager import character_manager
     if chars is None:
@@ -273,6 +274,8 @@ async def generate_dialogue(
     # トピック未指定→ランダム選択（AIニュース固定を解消）
     resolved_topic = topic.strip() or pick_random_topic()
     user_content = f"テーマ: {resolved_topic}"
+    if memory_ctx:
+        user_content += f"\n【番組コンテキスト】\n{memory_ctx}"
     if context:
         user_content += f"\n【参考情報】{context}"
 
@@ -294,7 +297,7 @@ async def generate_dialogue(
     lines = _parse_dialogue(raw, valid_names)
     if not lines:
         log.warning(f"パース失敗。raw:\n{raw[:300]}")
-    return lines
+    return lines, resolved_topic
 
 
 def _parse_dialogue(raw: str, valid_names: set[str]) -> list[dict]:

@@ -27,6 +27,7 @@ class PlaybackWorker:
         self.idle_event     = idle_event
         self._done_event    = asyncio.Event()
         self.bgm_volume: float = max(0.0, min(2.0, BGM_VOLUME))  # 0.0〜2.0
+        self.tts_pause: float  = 0.35   # TTS セグメント間の自然な間（秒）
 
     async def run(self):
         log.info("PlaybackWorker 起動")
@@ -66,10 +67,14 @@ class PlaybackWorker:
         self._done_event.clear()
         source: discord.AudioSource = discord.FFmpegPCMAudio(str(wav_path))
 
-        # BGMは音量調整ラッパーを適用（TTSはそのまま）
+        # BGMは音量調整 + loudnorm で音量を均一化
         if job_type == "bgm":
+            source = discord.FFmpegPCMAudio(
+                str(wav_path),
+                options="-af loudnorm=I=-16:TP=-1.5:LRA=11",
+            )
             source = discord.PCMVolumeTransformer(source, volume=self.bgm_volume)
-            log.debug(f"BGM音量: {self.bgm_volume:.0%}")
+            log.debug(f"BGM音量: {self.bgm_volume:.0%} + loudnorm")
 
         loop = asyncio.get_running_loop()
 
@@ -83,6 +88,9 @@ class PlaybackWorker:
         log.info(f"再生開始: [{job_type}] {label}")
 
         await self._done_event.wait()
+        # TTS セグメント間に自然な間を入れる
+        if job_type == "tts" and self.tts_pause > 0:
+            await asyncio.sleep(self.tts_pause)
         await self._push_status("idle", "")
         log.info(f"再生完了: {label}")
 
