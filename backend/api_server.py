@@ -236,6 +236,38 @@ def build_app(bot, speech_queue, tts_queue, bgm_prefetch_q, music_request_queue,
             "cast_label": result["label"],
         })
 
+    async def post_cast_custom(request: web.Request):
+        """任意のキャラIDリストでカスタムキャストを設定する
+        body: {"char_ids": ["haru", "sayo", "shiro"]}
+        """
+        from services.character_manager import character_manager, CHARACTERS
+        body     = await request.json()
+        char_ids = body.get("char_ids", [])
+        if not isinstance(char_ids, list) or len(char_ids) < 2:
+            return web.json_response(
+                {"ok": False, "error": "char_ids must be a list of 2+ character IDs"}, status=400
+            )
+        if len(char_ids) > 6:
+            return web.json_response(
+                {"ok": False, "error": "max 6 characters"}, status=400
+            )
+        unknown = [c for c in char_ids if c not in CHARACTERS]
+        if unknown:
+            return web.json_response(
+                {"ok": False, "error": f"unknown character IDs: {unknown}"}, status=404
+            )
+        chars = character_manager.set_custom(char_ids)
+        return web.json_response({
+            "ok":   True,
+            "cast_name":  "custom",
+            "cast_label": "カスタム",
+            "characters": [
+                {"id": c.id, "name": c.name, "role": c.role,
+                 "speaker_id": c.speaker_id, "speaker_name": c.speaker_name}
+                for c in chars
+            ],
+        })
+
     # ─── OTP エンドポイント (Discord bot → Hono 検証用) ──────
     async def post_otp_verify(request: web.Request):
         """Hono からの OTP 検証リクエスト (127.0.0.1 のみ受付)"""
@@ -278,6 +310,7 @@ def build_app(bot, speech_queue, tts_queue, bgm_prefetch_q, music_request_queue,
     app.router.add_post("/stop",            post_stop)
     app.router.add_post("/cast",            post_cast)
     app.router.add_post("/shuffle",         post_shuffle)
+    app.router.add_post("/cast/custom",     post_cast_custom)
     app.router.add_post("/bgm-volume",      post_bgm_volume)
     app.router.add_post("/otp/verify",      post_otp_verify)
     app.router.add_post("/otp/generate",    post_otp_generate)

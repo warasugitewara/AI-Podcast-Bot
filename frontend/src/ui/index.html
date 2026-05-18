@@ -135,8 +135,33 @@
     .log-ev{color:var(--accent2);flex-shrink:0}
     .log-detail{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-    /* ── Misc ── */
-    .spacer{flex:1}
+    /* ── Custom Cast Builder ── */
+    #custom-cast-panel{margin-top:.8rem;border-top:1px solid var(--border);padding-top:.8rem;display:none}
+    .char-sel-grid{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.7rem}
+    .char-sel-btn{padding:.35rem .65rem;border-radius:8px;font-size:.78rem;
+                  background:var(--border);color:var(--sub);border:1px solid var(--border);
+                  cursor:pointer;transition:all .15s;user-select:none}
+    .char-sel-btn:hover{color:var(--text)}
+    .char-sel-btn.selected{background:var(--accent)25;border-color:var(--accent);color:var(--accent)}
+    .char-sel-count{font-size:.75rem;color:var(--sub);margin-bottom:.4rem}
+
+    /* ── Char card extended colors ── */
+    .char-card.ken  {background:#2a1a0a;border-color:#f97316 40}
+    .char-card.nana {background:#2a1030;border-color:#e879f9 40}
+    .char-card.zona {background:#0a2a1a;border-color:#34d399 40}
+    .char-card.sayo {background:#1a0a2a;border-color:#a78bfa 40}
+    .char-card.shiro{background:#0a1a2a;border-color:#60a5fa 40}
+    .char-card.nia  {background:#1a2a0a;border-color:#86efac 40}
+    .char-card.maron{background:#2a1a10;border-color:#fb923c 40}
+    .char-card.nurse{background:#0a2a2a;border-color:#22d3ee 40}
+    .char-card.ken   .char-name{color:#f97316}
+    .char-card.nana  .char-name{color:#e879f9}
+    .char-card.zona  .char-name{color:#34d399}
+    .char-card.sayo  .char-name{color:#a78bfa}
+    .char-card.shiro .char-name{color:#60a5fa}
+    .char-card.nia   .char-name{color:#86efac}
+    .char-card.maron .char-name{color:#fb923c}
+    .char-card.nurse .char-name{color:#22d3ee}
     .row{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
     .mt{margin-top:.6rem}
     .divider{height:1px;background:var(--border);margin:.7rem 0}
@@ -255,6 +280,21 @@
       <div class="cast-btns" id="cast-btns"></div>
 
       <div style="font-size:.75rem;color:var(--sub)" id="cast-desc"></div>
+
+      <!-- カスタムキャストビルダー -->
+      <div style="margin-top:.6rem">
+        <button class="btn-sm btn-neutral" onclick="toggleCustomBuilder()" id="custom-builder-toggle">
+          ✏️ カスタム作成
+        </button>
+      </div>
+      <div id="custom-cast-panel">
+        <div class="char-sel-count" id="custom-sel-count">0人選択中 (2〜6人)</div>
+        <div class="char-sel-grid" id="custom-char-sel"></div>
+        <div class="row">
+          <button class="btn-sm btn-success" onclick="applyCustomCast()">✅ 適用</button>
+          <button class="btn-sm btn-neutral" onclick="clearCustomSel()">✖ クリア</button>
+        </div>
+      </div>
     </div>
 
     <!-- キュー詳細 -->
@@ -354,6 +394,7 @@ const STATUS_MAP = {
   vc_empty:        ["👥","空室検知"],
   daily_limit:     ["🔴","日次上限"],
   music_queuing:   ["🎵","音楽キュー中"],
+  cast_rotated:    ["🎭","キャスト自動切替"],
 };
 function updateStatus(ev, detail) {
   const [icon, text] = STATUS_MAP[ev] ?? ["⚙️", ev.replace(/_/g," ")];
@@ -494,17 +535,28 @@ async function queueTrending(url, label) {
 }
 
 // ─── キャスト ─────────────────────────────────────────────────
-const CHAR_COLORS = { haru:"haru", ao:"ao", yuki:"yuki", sora:"sora", rei:"rei" };
+const CHAR_COLORS = {
+  haru:"haru", ao:"ao", yuki:"yuki", sora:"sora", rei:"rei",
+  ken:"ken", nana:"nana", zona:"zona", sayo:"sayo", shiro:"shiro",
+  nia:"nia", maron:"maron", nurse:"nurse",
+};
+
+// カスタムキャストビルダー
+let _customSelected = new Set();
+let _allChars = [];
 
 async function loadCast() {
-  const [cast, casts] = await Promise.all([
+  const [cast, casts, chars] = await Promise.all([
     api("GET", "/cast"),
     api("GET", "/casts"),
+    api("GET", "/chars"),
   ]);
   if (!cast || !casts) return;
   state.cast  = cast;
   state.casts = casts;
+  if (chars) _allChars = chars;
   renderCastPanel(cast, casts);
+  renderCustomBuilder(chars || []);
 }
 
 function renderCastPanel(cast, casts) {
@@ -522,14 +574,77 @@ function renderCastPanel(cast, casts) {
   // Cast name badge
   document.getElementById("cast-name-badge").textContent = cast.cast_label || cast.cast_name;
   document.getElementById("cast-desc").textContent =
-    casts[cast.cast_name]?.desc ?? "";
+    casts[cast.cast_name]?.desc ?? (cast.cast_name === "custom" ? "カスタム編成" : "");
 
-  // Cast preset buttons
+  // Cast preset buttons (スクロール可能なコンテナに変更)
   const btnsEl = document.getElementById("cast-btns");
   btnsEl.innerHTML = Object.entries(casts).map(([key, info]) =>
     `<button class="cast-btn ${key === cast.cast_name ? 'active' : ''}"
+       title="${escAttr(info.desc||'')}"
        onclick="setCast('${escAttr(key)}')">${escHtml(info.label)}</button>`
+  ).join("") +
+    (cast.cast_name === "custom"
+      ? `<button class="cast-btn active" title="カスタム編成">✏️ カスタム</button>`
+      : "");
+}
+
+function renderCustomBuilder(chars) {
+  const el = document.getElementById("custom-char-sel");
+  if (!chars.length) return;
+  el.innerHTML = chars.map(c =>
+    `<button class="char-sel-btn ${_customSelected.has(c.id) ? 'selected' : ''}"
+       id="sel-${escAttr(c.id)}"
+       onclick="toggleCharSel('${escAttr(c.id)}')"
+       title="${escAttr(c.style||c.role)}"
+     >${escHtml(c.name)}<span style="font-size:.65rem;opacity:.7;display:block">${escHtml(c.role)}</span></button>`
   ).join("");
+}
+
+function toggleCustomBuilder() {
+  const panel = document.getElementById("custom-cast-panel");
+  const visible = panel.style.display !== "none";
+  panel.style.display = visible ? "none" : "block";
+  document.getElementById("custom-builder-toggle").textContent =
+    visible ? "✏️ カスタム作成" : "✖ 閉じる";
+}
+
+function toggleCharSel(id) {
+  if (_customSelected.has(id)) {
+    _customSelected.delete(id);
+  } else {
+    if (_customSelected.size >= 6) {
+      appendLog("custom_cast", "最大6人まで選択できます");
+      return;
+    }
+    _customSelected.add(id);
+  }
+  const btn = document.getElementById(`sel-${id}`);
+  if (btn) btn.classList.toggle("selected", _customSelected.has(id));
+  document.getElementById("custom-sel-count").textContent =
+    `${_customSelected.size}人選択中 (2〜6人)`;
+}
+
+function clearCustomSel() {
+  _customSelected.clear();
+  document.querySelectorAll(".char-sel-btn").forEach(b => b.classList.remove("selected"));
+  document.getElementById("custom-sel-count").textContent = "0人選択中 (2〜6人)";
+}
+
+async function applyCustomCast() {
+  if (_customSelected.size < 2) {
+    appendLog("custom_cast", "2人以上選択してください");
+    return;
+  }
+  const ids = [..._customSelected];
+  const d = await api("POST", "/cast/custom", { char_ids: ids });
+  if (d?.ok) {
+    appendLog("cast_custom", ids.join(", "));
+    await loadCast();
+    toggleCustomBuilder();
+    clearCustomSel();
+  } else {
+    appendLog("cast_error", d?.error || "エラー");
+  }
 }
 
 async function setCast(name) {

@@ -142,7 +142,9 @@ CHARACTERS: dict[str, Character] = {
 
 
 # ─── キャスト定義 (キャラの組み合わせ) ─────────────────────────
+# 「古参 × 新人」「テーマ別」「雰囲気別」の多様な組み合わせ
 CASTS: dict[str, dict] = {
+    # ── 古参メイン ──────────────────────────────────────────────
     "standard": {
         "label": "定番コンビ",
         "chars": ["haru", "ao"],
@@ -169,10 +171,11 @@ CASTS: dict[str, dict] = {
         "desc":  "賑やかで予想外の展開",
     },
     "full": {
-        "label": "フルキャスト",
+        "label": "古参フルキャスト",
         "chars": ["haru", "ao", "yuki", "sora"],
-        "desc":  "全員集合・盛り上がり重視",
+        "desc":  "古参全員集合・盛り上がり重視",
     },
+    # ── 新人メイン ──────────────────────────────────────────────
     "hype": {
         "label": "ハイテンションコンビ",
         "chars": ["ken", "zona"],
@@ -207,6 +210,52 @@ CASTS: dict[str, dict] = {
         "label": "オールスターズ",
         "chars": ["haru", "ao", "yuki", "ken", "sora"],
         "desc":  "5人で豪華なラジオ番組",
+    },
+    # ── 古参×新人クロスオーバー ────────────────────────────────
+    "newcomer_rush": {
+        "label": "古参MC×新人2人",
+        "chars": ["haru", "sayo", "shiro"],
+        "desc":  "ハルが新人のサヨ・シロと初対面トーク。クール×天然×明るいMCの化学反応",
+    },
+    "senpai_kouhai": {
+        "label": "先輩後輩ラジオ",
+        "chars": ["ao", "rei", "nana", "maron"],
+        "desc":  "落ち着いた古参2人と元気な新人2人。知識×癒しの融合",
+    },
+    "fire_and_ice": {
+        "label": "火と氷コンビ",
+        "chars": ["ken", "sayo"],
+        "desc":  "熱血ケン×クールサヨの正反対コンビ。真逆の視点が面白い",
+    },
+    "chaos_senior": {
+        "label": "混沌コンビ",
+        "chars": ["sora", "shiro", "nia"],
+        "desc":  "自由奔放×天然×不思議ちゃん。脱線必至の予測不能トーク",
+    },
+    "knowledge_war": {
+        "label": "知識バトルトリオ",
+        "chars": ["ao", "nurse", "sayo"],
+        "desc":  "論理×データ×哲学。3つの「知」が激突する深掘り放送",
+    },
+    "energy_squad": {
+        "label": "エナジースクワッド",
+        "chars": ["ken", "nana", "zona"],
+        "desc":  "熱血×応援×実況の超ハイテンション新人トリオ",
+    },
+    "night_lounge": {
+        "label": "夜のラウンジ",
+        "chars": ["yuki", "sayo", "maron"],
+        "desc":  "辛口×ミステリアス×癒し。大人の夜ラジオ",
+    },
+    "rainbow_squad": {
+        "label": "レインボー隊",
+        "chars": ["haru", "sora", "shiro", "nia"],
+        "desc":  "明るいMC・自由人・天然・不思議ちゃん。賑やか混合4人組",
+    },
+    "grand_slam": {
+        "label": "グランドスラム",
+        "chars": ["haru", "ao", "yuki", "sayo", "ken"],
+        "desc":  "古参3人+新人2人の豪華5人。対話の密度最高峰",
     },
 }
 

@@ -4,7 +4,6 @@ YouTube URL / YouTube Music URL の直接ダウンロードにも対応。
 カラオケ・オフボーカル・cover版を自動排除して正規音源のみ取得。
 """
 import asyncio
-import hashlib
 import logging
 import re
 from pathlib import Path
@@ -15,6 +14,20 @@ from config import BGM_CACHE_DIR
 log = logging.getLogger("ytdlp")
 
 BGM_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+# ─── 再生済み動画ID追跡（同じ曲の繰り返しを防ぐ）─────────────
+_RECENTLY_PLAYED_MAX = 30
+_recently_played: list[str] = []   # 最新が末尾
+
+def _mark_played(video_id: str):
+    if video_id in _recently_played:
+        _recently_played.remove(video_id)
+    _recently_played.append(video_id)
+    while len(_recently_played) > _RECENTLY_PLAYED_MAX:
+        _recently_played.pop(0)
+
+def _is_recently_played(video_id: str) -> bool:
+    return video_id in _recently_played
 
 YDL_OPTS_BASE = {
     "format": "bestaudio/best",
@@ -109,6 +122,7 @@ async def download_url(url: str, max_duration: int = 600, user_request: bool = F
             return None, ""
         cached = _cache_path_for_id(info["id"])
         if cached:
+            _mark_played(info["id"])
             log.info(f"URLダウンロード完了: {title!r} → {cached.name}")
             return cached, title
     except Exception as e:
@@ -154,12 +168,26 @@ async def search_and_download(query: str, max_duration: int = 600) -> tuple[Path
             log.warning(f"検索結果なし: {query!r}")
             return None, ""
 
-        # 候補をフィルタリングして最初の良いものを選ぶ
+        # 候補をフィルタリングして最初の良いものを選ぶ（最近再生済みも除外）
         chosen = None
         for entry in entries:
-            if entry and not _is_bad_entry(entry):
-                chosen = entry
-                break
+            if not entry:
+                continue
+            vid = entry.get("id", "")
+            if _is_bad_entry(entry):
+                continue
+            if _is_recently_played(vid):
+                log.debug(f"最近再生済みのためスキップ: {entry.get('title')!r}")
+                continue
+            chosen = entry
+            break
+
+        if chosen is None:
+            # recently_played を無視して再トライ（フィルターのみ適用）
+            for entry in entries:
+                if entry and not _is_bad_entry(entry):
+                    chosen = entry
+                    break
 
         if chosen is None:
             # 全部弾かれた場合は最初の候補を使う（最終手段）
@@ -176,6 +204,7 @@ async def search_and_download(query: str, max_duration: int = 600) -> tuple[Path
         cached = _cache_path_for_id(info["id"])
         title  = info.get("title", query)
         if cached:
+            _mark_played(info["id"])
             log.info(f"BGMダウンロード完了: {title!r} → {cached.name}")
             return cached, title
 
@@ -185,7 +214,7 @@ async def search_and_download(query: str, max_duration: int = 600) -> tuple[Path
 
 
 async def get_bgm(query_or_url: str, user_request: bool = False) -> tuple[Path | None, str]:
-    """URLなら直接DL、キーワードなら検索DL。キャッシュ確認付き。(path, title) を返す。
+    """URLなら直接DL、キーワードなら検索DL。(path, title) を返す。
     user_request=True の場合はURLフィルターをスキップ。
     """
     s = query_or_url.strip()
@@ -193,12 +222,6 @@ async def get_bgm(query_or_url: str, user_request: bool = False) -> tuple[Path |
     if is_youtube_url(s):
         return await download_url(s, user_request=user_request)
 
-    # キーワード検索: クエリのMD5でキャッシュ確認
-    key = hashlib.md5(s.encode()).hexdigest()[:8]
-    for p in BGM_CACHE_DIR.glob("*.opus"):
-        if p.stem.startswith(key):
-            log.debug(f"BGMキャッシュ使用: {p.name}")
-            return p, s
     return await search_and_download(s)
 
 

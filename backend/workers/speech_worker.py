@@ -1,6 +1,17 @@
 """
 ContentScheduler: 台本生成・音楽ブレイクのスケジューリング管理
 
+フロー（パイプライン化済み）:
+  ┌─ 音楽ブレイク時 ─────────────────────────────────────────┐
+  │ idle待ち → BGM投入 → BGM再生中に PREFETCH_COUNT 分先読み │
+  │ → 音楽終了後すぐにコンテンツ再生（無音なし）              │
+  └───────────────────────────────────────────────────────────┘
+  ┌─ 通常エピソード間 ────────────────────────────────────────┐
+  │ tts_queue が空になったら即LLM生成開始                      │
+  │ → 前エピソード再生中に次エピソードを合成                   │
+  │ → 前エピソード終了時に次がすでに再生キューに積まれている   │
+  └───────────────────────────────────────────────────────────┘
+
 優先順位:
   1. ユーザー音楽リクエスト (music_request_queue)
   2. 定期音楽ブレイク (MUSIC_EVERY_N エピソードごと)
@@ -21,7 +32,9 @@ log = logging.getLogger("content_scheduler")
 
 MIN_LLM_INTERVAL = NIM_MIN_INTERVAL_SEC   # .env で上書き可能、デフォルト120秒
 MUSIC_EVERY_N    = 3     # N回対話ごとに音楽ブレイク
+PREFETCH_COUNT   = 3     # 音楽中に先読み生成するエピソード数
 MAX_BACKOFF      = 600   # 最大バックオフ(秒)
+TTS_PIPELINE_MAX = 1     # tts_queue がこの数以下になったら次の生成を開始
 
 
 class SpeechWorker:   # 後方互換でクラス名は維持
@@ -54,17 +67,19 @@ class SpeechWorker:   # 後方互換でクラス名は維持
                 # VC空室中は新規生成しない（LLMコールとTTS生成を節約）
                 await self.broadcast_active.wait()
 
-                await self.idle_event.wait()
-
                 # ── 優先1: ユーザー音楽リクエスト ──────────────
                 try:
                     req = self.music_request_queue.get_nowait()
                     self.music_request_queue.task_done()
+                    # tts_queue + playback_queue 両方空になってから挿入
+                    await self._wait_full_idle()
                     await self._trigger_music(
                         req["query"],
                         label=req.get("title", req["query"]),
                         user_request=req.get("user_request", False),
                     )
+                    # 曲が終わるまで待って次へ（BGM中の先読みはしない：ユーザー指定曲優先）
+                    await self._wait_full_idle()
                     continue
                 except asyncio.QueueEmpty:
                     pass
@@ -72,11 +87,30 @@ class SpeechWorker:   # 後方互換でクラス名は維持
                 # ── 優先2: 定期音楽ブレイク ─────────────────────
                 if self._episode_count > 0 and self._episode_count % MUSIC_EVERY_N == 0:
                     log.info(f"音楽ブレイク ({self._episode_count}エピソード完了)")
+                    # tts_queue + playback_queue が両方空になってから音楽へ
+                    await self._wait_full_idle()
                     await self._trigger_music("", label="自動選曲中")
                     self._episode_count = 0
+
+                    # ── 音楽ブレイク時にキャストを自動ローテーション ──
+                    from services.character_manager import character_manager
+                    new_cast = character_manager.shuffle()
+                    log.info(f"キャスト自動ローテーション → {new_cast['label']}")
+                    await self._push_status("cast_rotated", new_cast["label"])
+
+                    # ── BGM再生中に先読み生成 ─────────────────
+                    # episode_count は先読み分をカウントしない（次の音楽ブレイクは
+                    # メインループで通常生成した分だけで判定する）
+                    await self._prefetch_during_bgm(PREFETCH_COUNT)
+
+                    # 先読み分 + BGM が全て終わるまで待ってから次のループへ
+                    await self._wait_full_idle()
                     continue
 
-                # ── 優先3: 手動/自動トーク ──────────────────────
+                # ── 優先3: 手動/自動トーク (パイプライン) ───────
+                # tts_queue が閾値以下になったら即生成（前エピソード再生中でもOK）
+                await self._wait_tts_slot()
+
                 try:
                     job = self.speech_queue.get_nowait()
                     self.speech_queue.task_done()
@@ -91,20 +125,24 @@ class SpeechWorker:   # 後方互換でクラス名は維持
                     await self._push_status("cooldown", f"{remaining:.0f}秒")
 
                     # アイドル中ならBGMで無音を埋める
-                    if self.idle_event.is_set():
+                    if self.idle_event.is_set() and self.tts_queue.qsize() == 0:
                         log.info("クールタイム中 → BGMを自動挿入")
                         await self._trigger_music("", label="BGM（クールタイム中）")
 
-                    # クールタイムを1秒ごとにカウントダウン更新
+                    # カウントダウン（途中でアイドルになってもBGM追加挿入）
                     deadline = time.monotonic() + remaining
                     while True:
                         left = deadline - time.monotonic()
                         if left <= 0:
                             break
                         await self._push_status("cooldown", f"{left:.0f}秒")
+                        # 無音になったら追加BGM
+                        if self.idle_event.is_set() and self.tts_queue.qsize() == 0:
+                            log.info("クールタイム中に無音検知 → BGM追加挿入")
+                            await self._trigger_music("", label="BGM（クールタイム中）")
                         await asyncio.sleep(min(5.0, left))
 
-                # 生成前にビジーマーク（race condition防止）
+                # 生成前にビジーマーク
                 self.idle_event.clear()
 
                 await self._generate(job)
@@ -116,8 +154,82 @@ class SpeechWorker:   # 後方互換でクラス名は維持
                 break
             except Exception as e:
                 log.error(f"ContentScheduler エラー: {e}", exc_info=True)
-                self.idle_event.set()   # エラー時はidleに戻す
+                self.idle_event.set()
                 await asyncio.sleep(10)
+
+    # ─── パイプライン待機 ──────────────────────────────────────
+    async def _wait_tts_slot(self):
+        """tts_queue が閾値以下になるまで待機（パイプライン制御）"""
+        waited = False
+        while self.tts_queue.qsize() > TTS_PIPELINE_MAX:
+            if not waited:
+                log.debug(f"tts_queue={self.tts_queue.qsize()} → 先行合成待ち")
+                waited = True
+            await asyncio.sleep(0.5)
+
+    async def _wait_full_idle(self):
+        """tts_queue・playback_queue の両方が空になるまで待機
+        (idle_event は playback_queue のみ監視するため、tts_queue も別途確認)
+        """
+        while True:
+            if self.tts_queue.qsize() == 0 and self.idle_event.is_set():
+                break
+            await asyncio.sleep(0.5)
+
+    # ─── BGM中先読み ──────────────────────────────────────────
+    async def _prefetch_during_bgm(self, count: int):
+        """BGM 再生中に最大 count エピソードを先読み生成する
+        ※ _episode_count はここでは加算しない（音楽ブレイクタイミングに影響させない）
+        """
+        log.info(f"BGM中先読み開始: 最大{count}エピソード生成します")
+        generated = 0
+        for i in range(count):
+            if not self.broadcast_active.is_set():
+                log.info("放送非アクティブのため先読み中断")
+                break
+
+            # NIM クールタイム遵守
+            elapsed   = time.monotonic() - self._last_gen_time
+            remaining = max(0.0, self._backoff - elapsed)
+            if remaining > 0:
+                log.info(f"BGM先読み {i+1}/{count}: NIMクールタイム {remaining:.0f}秒待機")
+                await self._push_status("cooldown", f"先読み待機 {remaining:.0f}秒")
+                await asyncio.sleep(remaining)
+
+            # ユーザーリクエストが来たら先読み中断して優先
+            try:
+                req = self.music_request_queue.get_nowait()
+                self.music_request_queue.task_done()
+                log.info("先読み中にユーザー音楽リクエスト → 先読み中断")
+                await self._trigger_music(
+                    req["query"],
+                    label=req.get("title", req["query"]),
+                    user_request=req.get("user_request", False),
+                )
+                break
+            except asyncio.QueueEmpty:
+                pass
+
+            try:
+                job = {"topic": "", "auto": True}
+                try:
+                    job = self.speech_queue.get_nowait()
+                    self.speech_queue.task_done()
+                except asyncio.QueueEmpty:
+                    pass
+
+                log.info(f"BGM先読み {i+1}/{count}: 台本生成中...")
+                await self._push_status("generating", f"BGM先読み {i+1}/{count}")
+                await self._generate(job)
+                self._last_gen_time = time.monotonic()
+                generated += 1
+                log.info(f"BGM先読み {i+1}/{count} 完了 (計{generated}本生成)")
+
+            except Exception as e:
+                log.warning(f"BGM先読み {i+1} エラー: {e}")
+                break
+
+        log.info(f"BGM中先読み終了: {generated}/{count}エピソード生成")
 
     # ─── 音楽トリガー ─────────────────────────────────────────
     async def _trigger_music(self, query: str, label: str = "", user_request: bool = False):

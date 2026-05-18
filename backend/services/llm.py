@@ -51,34 +51,94 @@ def get_daily_usage() -> dict:
 # ─── BGMクエリプール（LLM不使用）──────────────────────────
 # "official audio" を付けることでカラオケ・cover版が上位に来にくくする
 _BGM_POOL = [
-    "lofi hip hop radio beats to relax study to official",
-    "lofi jazz cafe background music official audio",
+    # Lo-fi / Chill
+    "lofi hip hop radio beats to relax study official audio",
+    "lofi jazz cafe background music official",
     "chill lofi beats no copyright free music",
+    "lofi hip hop mix study concentration official",
+    "lo-fi chill music playlist official audio",
+    "lofi beats cozy night official audio",
+    "chillhop music cafe official audio",
+    # Jazz / Bossa Nova
     "smooth jazz background music official audio",
     "bossa nova cafe jazz official audio",
     "jazz coffee shop background music official",
+    "jazz bar night music official audio",
+    "bossa nova morning cafe official",
+    "jazz piano relaxing official audio",
+    "funky jazz instrumental official audio",
+    # Classical / Piano
+    "classical piano background music official",
+    "piano lofi beats relaxing official",
+    "solo piano calm music official audio",
+    "classical music focus study official",
+    "piano ambient background official audio",
+    # Electronic / Synth
     "ambient electronic chill background music official",
     "synthwave lo-fi no copyright official audio",
     "chillwave background music official audio",
-    "classical piano background music official",
-    "upbeat background music no copyright official",
-    "funky jazz instrumental official audio",
-    "piano lofi beats relaxing official",
+    "synthwave driving music official audio",
+    "ambient electronic deep focus official",
+    "vaporwave aesthetic music official audio",
+    "future bass chill official audio",
+    # Acoustic / Indie
     "acoustic guitar background chill official audio",
+    "indie pop chill music official audio",
+    "acoustic folk background music official",
+    "indie acoustic guitar relax official",
+    # Japanese / J-pop / City pop
     "city pop japanese style official audio",
     "j-pop official audio BGM",
-    "vaporwave aesthetic music official audio",
-    "study music concentration official audio",
+    "japanese city pop 80s official audio",
+    "japanese lofi city pop official",
+    "j-city pop chill official audio",
+    "japanese jazz funk official audio",
+    "japanese ambient music official",
+    # Neo soul / R&B
     "neo soul background music official",
-    "indie pop chill music official audio",
+    "neo soul r&b instrumental official audio",
+    "soul jazz background official audio",
+    # Upbeat / Pop
+    "upbeat background music no copyright official",
+    "happy background music official audio",
+    "feel good indie pop official audio",
+    "uplifting background music official",
+    # Study / Focus
+    "study music concentration official audio",
+    "deep focus music for work official",
+    "concentration music alpha waves official",
+    "focus music productivity official audio",
+    # Ambient / Nature
+    "ambient music relaxing nature official audio",
+    "calm ambient background official",
+    "meditation ambient music official audio",
+    # Electronic / Dance (mellow)
+    "chillstep music official audio",
+    "downtempo electronic music official",
+    "trip hop background music official audio",
+    "nu jazz electronic official audio",
 ]
-_bgm_pool_index = 0
+# シャッフル済みインデックスリスト（同じ曲が近くに来ないようにする）
+_bgm_pool_order: list[int] = []
+_bgm_pool_pos:   int = 0
+
+def _ensure_bgm_order():
+    global _bgm_pool_order
+    if not _bgm_pool_order:
+        import random as _r
+        _bgm_pool_order = list(range(len(_BGM_POOL)))
+        _r.shuffle(_bgm_pool_order)
 
 def pick_bgm_query() -> str:
-    global _bgm_pool_index
-    q = _BGM_POOL[_bgm_pool_index % len(_BGM_POOL)]
-    _bgm_pool_index += 1
-    return q
+    global _bgm_pool_pos
+    _ensure_bgm_order()
+    idx = _bgm_pool_order[_bgm_pool_pos % len(_bgm_pool_order)]
+    _bgm_pool_pos += 1
+    # 一周したらシャッフルし直す
+    if _bgm_pool_pos % len(_bgm_pool_order) == 0:
+        import random as _r
+        _r.shuffle(_bgm_pool_order)
+    return _BGM_POOL[idx]
 
 
 # ─── トピックプール（多様なジャンル）──────────────────────
@@ -132,26 +192,40 @@ def pick_random_topic() -> str:
 
 # ─── システムプロンプト ────────────────────────────────────
 _SOLO_SYSTEM = (
-    "あなたはAIポッドキャストDJ。明るく自然な日本語で3〜5文のトークを生成。"
-    "話を膨らませてリスナーが楽しめる内容にする。捏造は禁止。"
+    "あなたはAIポッドキャストDJ。明るく自然な日本語で5〜8文のトークを生成。"
+    "具体例・エピソード・数字を交えて話を膨らませ、リスナーが「へえ！」と思える内容にする。"
+    "途中で自分の意見や感想を入れる。捏造は禁止。"
 )
 
 
 def _build_dialogue_system(chars: list, has_context: bool) -> str:
-    char_desc = " / ".join(f"{c.name}({c.role}:{c.style})" for c in chars)
+    char_desc = "\n".join(
+        f"  ・{c.name}（{c.role}）: {c.style}" for c in chars
+    )
     n      = len(chars)
-    turns  = n * 3          # 2人→6ターン、3人→9ターン
-    max_t  = n * 4          # 2人→最大8ターン
+    # 2人→10〜14ターン、3人→12〜18ターン、4人以上→16〜24ターン
+    turns  = n * 5
+    max_t  = n * 7
     first  = chars[0].name
     last   = chars[-1].name
-    ctx_rule = "提供情報を活かしつつ自分の意見も入れる。" if has_context else "自由に会話してよい。捏造禁止。"
+    ctx_rule = (
+        "提供された参考情報を土台にしつつ、各キャラが自分の視点・意見・ツッコミを必ず入れる。"
+    ) if has_context else (
+        "テーマについて各キャラが自由に持論・体験・例え話を展開してよい。事実の捏造は禁止。"
+    )
 
     return (
-        f"AIポッドキャスト台本ライター。登場:{char_desc}\n"
-        f"ルール:「名前: セリフ」形式のみ出力。{turns}〜{max_t}行。"
-        f"1セリフ60字以内。最初は{first}から始める。各キャラのstyleを厳守。"
-        f"{ctx_rule}"
-        f"自然な会話の流れを作り、最後は{first}か{last}が締める。"
+        f"あなたはAIラジオ番組の台本ライター。以下のキャラクターで会話台本を書く。\n"
+        f"登場人物:\n{char_desc}\n\n"
+        f"出力ルール:\n"
+        f"  - 「名前: セリフ」の形式のみ。それ以外のテキスト（ト書き・説明・コメント）は一切不要。\n"
+        f"  - {turns}〜{max_t}行を目安に（少なすぎると没）。\n"
+        f"  - 1セリフは20〜120字。短すぎも長すぎも避ける。\n"
+        f"  - 最初の発言は{first}から始める。最後は{first}か{last}が締める。\n"
+        f"  - 各キャラのstyleを厳守しながら、互いに反応・ツッコミ・驚き・反論・共感を入れる。\n"
+        f"  - 会話の中盤でひとつ意外な視点や豆知識・エピソードを盛り込む。\n"
+        f"  - 全体として「起承転結」の流れを作り、聴衆が飽きないよう盛り上がりのピークを作る。\n"
+        f"\n{ctx_rule}"
     )
 
 
@@ -172,8 +246,8 @@ async def generate_talk(topic: str, context: str = "") -> str:
             {"role": "system", "content": _SOLO_SYSTEM},
             {"role": "user",   "content": user_content},
         ],
-        max_tokens=200,
-        temperature=0.8,
+        max_tokens=400,
+        temperature=0.85,
     )
     return resp.choices[0].message.content.strip()
 
@@ -209,8 +283,8 @@ async def generate_dialogue(
             {"role": "system", "content": _build_dialogue_system(chars, bool(context))},
             {"role": "user",   "content": user_content},
         ],
-        max_tokens=600,
-        temperature=0.85,
+        max_tokens=1500,
+        temperature=0.9,
     )
     raw = resp.choices[0].message.content.strip()
     log.info(f"対話生成完了: {len(raw)}文字")

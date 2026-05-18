@@ -11,8 +11,11 @@ import random
 
 from services.ytdlp_service import get_bgm
 from services.llm import pick_bgm_query
+from services.voicevox import VoicevoxService
 
 log = logging.getLogger("bgm_worker")
+
+_voicevox = VoicevoxService()   # シングルトン（毎回newしない）
 
 # ─── キャラクター別アナウンステンプレート ─────────────────────
 _ANNOUNCE = {
