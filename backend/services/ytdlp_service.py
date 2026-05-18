@@ -34,15 +34,19 @@ YDL_OPTS_BASE = {
 # ─── カラオケ/粗悪コンテンツのフィルター ──────────────────────
 # タイトルにこれらが含まれる動画を弾く
 _REJECT_RE = re.compile(
-    r"カラオケ|karaoke|off\s*vocal|オフボーカル|歌ってみた|cover|covered by|"
-    r"instrumental\s*version|\(inst[.\s)]|\[inst[.\s)]|piano ver|acoustic ver|"
-    r"remake|リメイク|弾いてみた|叩いてみた|tribute|reaction|lyrics?\s*video",
+    r"カラオケ|karaoke|off\s*vocal|オフボーカル"
+    r"|歌ってみた|うたってみた|singing\s*cover|sing\s*cover"
+    r"|cover|covered by"
+    r"|instrumental\s*version|\(inst[.\s)]|\[inst[.\s)]"
+    r"|piano ver|acoustic ver"
+    r"|remake|リメイク|弾いてみた|叩いてみた"
+    r"|tribute|reaction|lyrics?\s*video",
     re.IGNORECASE,
 )
 
 # チャンネル名に含まれる怪しいキーワード（カラオケ専門チャンネル等）
 _REJECT_CHANNEL_RE = re.compile(
-    r"karaoke|カラオケ|off\s*vocal|歌ってみた|instrumental",
+    r"karaoke|カラオケ|off\s*vocal|歌ってみた|うたってみた|instrumental|singing\s*cover",
     re.IGNORECASE,
 )
 
