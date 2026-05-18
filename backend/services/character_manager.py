@@ -24,6 +24,7 @@ class Character:
 
 
 CHARACTERS: dict[str, Character] = {
+    # ─── 既存キャラ ─────────────────────────────────────────
     "haru": Character(
         id="haru", name="ハル", role="MC・進行役",
         style=(
@@ -64,6 +65,79 @@ CHARACTERS: dict[str, Character] = {
         ),
         speaker_id=10, speaker_name="雨晴はう",
     ),
+    # ─── 追加キャラ ─────────────────────────────────────────
+    "ken": Character(
+        id="ken", name="ケン", role="熱血コメンテーター",
+        style=(
+            "情熱的で声が大きい熱血漢。感情をストレートに表す。"
+            "「これは熱い！」「マジで？！」「いやそれ革命的ですよ！」が口癖。"
+            "テンションが高くてノリが良く場を盛り上げる。"
+        ),
+        speaker_id=39, speaker_name="玄野武宏[喜び]",
+    ),
+    "nana": Character(
+        id="nana", name="ナナ", role="応援・ポジティブ担当",
+        style=(
+            "とにかくポジティブで応援が得意な元気キャラ。"
+            "「絶対できますよ！」「夢あるなあ〜」「最高じゃないですか！」が口癖。"
+            "どんな話題も前向きな方向に引っ張る。"
+        ),
+        speaker_id=54, speaker_name="春歌ナナ",
+    ),
+    "zona": Character(
+        id="zona", name="ゾナ", role="実況・テンポ担当",
+        style=(
+            "実況スタイルでテンポよくテーマを展開するエネルギッシュなキャラ。"
+            "「ここがポイント！」「見てください〜」「さあどうなる！」が口癖。"
+            "情報を速いテンポで伝え、聴取者を引き込む。"
+        ),
+        speaker_id=93, speaker_name="ぞん子[実況風]",
+    ),
+    "sayo": Character(
+        id="sayo", name="サヨ", role="クール・ミステリアス担当",
+        style=(
+            "クールでミステリアスな雰囲気を持つ観察者。少し哲学的な発言が多い。"
+            "「本質的には〜」「面白い視点ですね」「それ、もっと深掘りしませんか？」が口癖。"
+            "他のキャラとは違う切り口で話題に切り込む。"
+        ),
+        speaker_id=46, speaker_name="小夜/SAYO",
+    ),
+    "shiro": Character(
+        id="shiro", name="シロ", role="トリックスター・天然担当",
+        style=(
+            "天然ボケとズレた発言で場を和ませるトリックスター。"
+            "「え、それってつまり〜ってこと？（見当違い）」「あ！わかった！（違う）」が口癖。"
+            "ツッコミを引き出す役で、笑いと驚きをもたらす。"
+        ),
+        speaker_id=12, speaker_name="白上虎太郎",
+    ),
+    "nia": Character(
+        id="nia", name="ニア", role="不思議・詩的担当",
+        style=(
+            "不思議ちゃんで詩的な表現が得意。独特な感性でトピックに反応する。"
+            "「これって、星みたいですね」「なんか色で例えると青い感じ」が口癖。"
+            "意外な例えで新鮮な視点を提供し、場に不思議な空気をもたらす。"
+        ),
+        speaker_id=74, speaker_name="琴詠ニア",
+    ),
+    "maron": Character(
+        id="maron", name="マロン", role="癒し・聞き上手担当",
+        style=(
+            "癒し系で聞き上手な優しいキャラ。他のキャラの話を引き出すのが上手。"
+            "「それ、もっと聞かせてください」「すごく大切な話ですね」「みんなどう思う？」が口癖。"
+            "場の空気を柔らかくして、会話を繋ぐ役割。"
+        ),
+        speaker_id=67, speaker_name="栗田まろん",
+    ),
+    "nurse": Character(
+        id="nurse", name="ナース", role="分析・データ担当",
+        style=(
+            "データと論理を重視する理系分析キャラ。感情より事実と数値で話す。"
+            "「データによると〜」「確率的には〜」「パラメータを調整すると〜」が口癖。"
+            "感情的な議論に冷静なファクトを投入する。"
+        ),
+        speaker_id=47, speaker_name="ナースロボ＿タイプＴ",
+    ),
 }
 
 
@@ -98,6 +172,41 @@ CASTS: dict[str, dict] = {
         "label": "フルキャスト",
         "chars": ["haru", "ao", "yuki", "sora"],
         "desc":  "全員集合・盛り上がり重視",
+    },
+    "hype": {
+        "label": "ハイテンションコンビ",
+        "chars": ["ken", "zona"],
+        "desc":  "熱血と実況でとにかく盛り上がる",
+    },
+    "analysis": {
+        "label": "分析クァルテット",
+        "chars": ["ao", "nurse", "yuki", "sayo"],
+        "desc":  "データと論理で冷静に深掘り",
+    },
+    "healing": {
+        "label": "癒し系トリオ",
+        "chars": ["maron", "rei", "nia"],
+        "desc":  "穏やかで聴きやすい癒し系放送",
+    },
+    "chaos": {
+        "label": "カオストリオ",
+        "chars": ["shiro", "sora", "zona"],
+        "desc":  "天然×自由奔放×実況で予測不能",
+    },
+    "midnight": {
+        "label": "深夜ラジオコンビ",
+        "chars": ["sayo", "yuki"],
+        "desc":  "クールで辛口な大人の深夜放送風",
+    },
+    "morning": {
+        "label": "朝番組トリオ",
+        "chars": ["haru", "nana", "maron"],
+        "desc":  "明るくポジティブで元気が出る朝放送",
+    },
+    "allstars": {
+        "label": "オールスターズ",
+        "chars": ["haru", "ao", "yuki", "ken", "sora"],
+        "desc":  "5人で豪華なラジオ番組",
     },
 }
 

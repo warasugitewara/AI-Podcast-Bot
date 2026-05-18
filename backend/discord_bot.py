@@ -124,6 +124,44 @@ class PodcastCog(commands.Cog):
         await self.bot.music_request_queue.put({"query": query, "title": query, "user_request": True})
         await interaction.response.send_message(f"🎵 「{query}」を音楽キューに追加しました", ephemeral=True)
 
+    # ─── VOLUME ──────────────────────────────────────────────
+    @commands.command(name="volume")
+    async def cmd_volume(self, ctx: commands.Context, value: str = ""):
+        """BGM音量を変更する (0〜200、省略で現在値表示)  例: !volume 80"""
+        pw = self.bot.playback_worker
+        if pw is None:
+            await ctx.send("⚠️ PlaybackWorkerが未初期化です", delete_after=5)
+            return
+        if not value:
+            await ctx.send(f"🔊 BGM音量: **{pw.bgm_volume:.0%}**", delete_after=10)
+            return
+        try:
+            vol = float(value.replace("%", "")) / 100.0
+            vol = max(0.0, min(2.0, vol))
+        except ValueError:
+            await ctx.send("⚠️ 数値を入力してください (例: !volume 80)", delete_after=5)
+            return
+        pw.bgm_volume = vol
+        try:
+            await ctx.message.delete()
+        except Exception:
+            pass
+        await ctx.send(f"🔊 BGM音量を **{vol:.0%}** に変更しました", delete_after=5)
+
+    @app_commands.command(name="volume", description="BGM音量を変更する (0〜200%、省略で現在値表示)")
+    @app_commands.describe(value="音量 (0〜200、省略で現在値表示)")
+    async def slash_volume(self, interaction: discord.Interaction, value: int = -1):
+        pw = self.bot.playback_worker
+        if pw is None:
+            await interaction.response.send_message("⚠️ PlaybackWorkerが未初期化です", ephemeral=True)
+            return
+        if value < 0:
+            await interaction.response.send_message(f"🔊 BGM音量: **{pw.bgm_volume:.0%}**", ephemeral=True)
+            return
+        vol = max(0.0, min(2.0, value / 100.0))
+        pw.bgm_volume = vol
+        await interaction.response.send_message(f"🔊 BGM音量を **{vol:.0%}** に変更しました", ephemeral=True)
+
     # ─── CAST ────────────────────────────────────────────────
     @commands.command(name="cast")
     async def cmd_cast(self, ctx: commands.Context, name: str = ""):
@@ -216,6 +254,7 @@ class RadioBot(commands.Bot):
 
         self.voice_client: discord.VoiceClient | None = None
         self._empty_timer: asyncio.Task | None = None  # VC空室タイマー
+        self.playback_worker = None  # main.py から後から設定される
 
     async def setup_hook(self):
         """CogとスラッシュコマンドをGuildに同期"""

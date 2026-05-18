@@ -11,7 +11,7 @@ from aiohttp import web
 log = logging.getLogger("api_server")
 
 
-def build_app(bot, speech_queue, tts_queue, bgm_prefetch_q, music_request_queue, status_queue, scheduler=None) -> web.Application:
+def build_app(bot, speech_queue, tts_queue, bgm_prefetch_q, music_request_queue, status_queue, scheduler=None, playback=None) -> web.Application:
     app = web.Application()
 
     # ─── SSE: ステータスストリーミング ──────────────────────
@@ -91,8 +91,31 @@ def build_app(bot, speech_queue, tts_queue, bgm_prefetch_q, music_request_queue,
         await music_request_queue.put({
             "query": query,
             "title": body.get("title", query),
+            "user_request": True,
         })
         return web.json_response({"ok": True, "queued": "music", "query": query})
+
+    async def get_bgm_volume(request: web.Request):
+        """BGM音量を返す"""
+        vol = playback.bgm_volume if playback else 0.8
+        return web.json_response({"volume": round(vol, 2)})
+
+    async def post_bgm_volume(request: web.Request):
+        """BGM音量を変更する (0.0〜2.0)"""
+        if playback is None:
+            return web.json_response({"ok": False, "error": "playback not available"}, status=503)
+        body  = await request.json()
+        value = body.get("volume")
+        if value is None:
+            return web.json_response({"ok": False, "error": "volume is required"}, status=400)
+        try:
+            vol = float(value)
+        except (TypeError, ValueError):
+            return web.json_response({"ok": False, "error": "volume must be a number"}, status=400)
+        vol = max(0.0, min(2.0, vol))
+        playback.bgm_volume = vol
+        log.info(f"BGM音量変更: {vol:.0%}")
+        return web.json_response({"ok": True, "volume": round(vol, 2)})
 
     async def post_stop(request: web.Request):
         """現在の再生を停止"""
@@ -248,12 +271,14 @@ def build_app(bot, speech_queue, tts_queue, bgm_prefetch_q, music_request_queue,
     app.router.add_get("/chars",            get_chars)
     app.router.add_get("/nim-usage",        get_nim_usage)
     app.router.add_get("/trending",         get_trending)
+    app.router.add_get("/bgm-volume",       get_bgm_volume)
     app.router.add_post("/talk",            post_talk)
     app.router.add_post("/bgm",             post_bgm)
     app.router.add_post("/music",           post_music)
     app.router.add_post("/stop",            post_stop)
     app.router.add_post("/cast",            post_cast)
     app.router.add_post("/shuffle",         post_shuffle)
+    app.router.add_post("/bgm-volume",      post_bgm_volume)
     app.router.add_post("/otp/verify",      post_otp_verify)
     app.router.add_post("/otp/generate",    post_otp_generate)
 

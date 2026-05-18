@@ -8,6 +8,8 @@ import logging
 from pathlib import Path
 import discord
 
+from config import BGM_VOLUME
+
 log = logging.getLogger("playback_worker")
 
 
@@ -24,6 +26,7 @@ class PlaybackWorker:
         self.status_queue   = status_queue
         self.idle_event     = idle_event
         self._done_event    = asyncio.Event()
+        self.bgm_volume: float = max(0.0, min(2.0, BGM_VOLUME))  # 0.0〜2.0
 
     async def run(self):
         log.info("PlaybackWorker 起動")
@@ -61,7 +64,12 @@ class PlaybackWorker:
             return
 
         self._done_event.clear()
-        source = discord.FFmpegPCMAudio(str(wav_path))
+        source: discord.AudioSource = discord.FFmpegPCMAudio(str(wav_path))
+
+        # BGMは音量調整ラッパーを適用（TTSはそのまま）
+        if job_type == "bgm":
+            source = discord.PCMVolumeTransformer(source, volume=self.bgm_volume)
+            log.debug(f"BGM音量: {self.bgm_volume:.0%}")
 
         loop = asyncio.get_running_loop()
 

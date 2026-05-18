@@ -52,3 +52,6 @@ NIM_CONTEXT_MAX_CHARS  = int(_get("NIM_CONTEXT_MAX_CHARS", "400"))
 
 # VC 空室時の自動停止タイムアウト（秒）。0 で無効
 VC_EMPTY_TIMEOUT_SEC = int(_get("VC_EMPTY_TIMEOUT_SEC", "300"))
+
+# 音量設定（0.0〜2.0、1.0 が原音量）
+BGM_VOLUME = float(_get("BGM_VOLUME", "0.8"))

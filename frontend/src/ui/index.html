@@ -208,6 +208,16 @@
 
       <div id="music-queue-list"><div class="empty-hint">キューは空です</div></div>
 
+      <!-- BGM音量スライダー -->
+      <div class="form-row mt" style="align-items:center;gap:.6rem">
+        <span style="white-space:nowrap;font-size:.85rem">🔊 BGM音量</span>
+        <input id="bgm-volume-slider" type="range" min="0" max="200" value="80"
+               style="flex:1;accent-color:var(--accent)"
+               oninput="onVolumeInput(this.value)"
+               onchange="setBgmVolume(this.value)">
+        <span id="bgm-volume-label" style="width:3.2rem;text-align:right;font-size:.85rem">80%</span>
+      </div>
+
       <div class="form-row">
         <input id="music-input" type="text"
                placeholder="YouTube URL または 曲名・アーティスト名" style="flex:1">
@@ -571,6 +581,23 @@ document.getElementById("talk-topic").addEventListener("keydown", e => {
   if (e.key === "Enter") sendTalk();
 });
 
+// ─── BGM音量 ─────────────────────────────────────────────────
+function onVolumeInput(val) {
+  document.getElementById("bgm-volume-label").textContent = `${val}%`;
+}
+async function setBgmVolume(val) {
+  const volume = parseFloat(val) / 100;
+  await api("POST", "/bgm-volume", { volume });
+}
+async function loadBgmVolume() {
+  try {
+    const r = await api("GET", "/bgm-volume");
+    const pct = Math.round((r.volume ?? 0.8) * 100);
+    document.getElementById("bgm-volume-slider").value = pct;
+    document.getElementById("bgm-volume-label").textContent = `${pct}%`;
+  } catch (_) {}
+}
+
 // ─── ポーリング ───────────────────────────────────────────────
 async function poll() {
   await Promise.all([refreshQueue(), loadNimUsage()]);
@@ -578,7 +605,7 @@ async function poll() {
 
 // ─── 初期化 ───────────────────────────────────────────────────
 (async () => {
-  await Promise.all([loadCast(), poll()]);
+  await Promise.all([loadCast(), poll(), loadBgmVolume()]);
   setInterval(poll, 10_000);
   setInterval(loadCast, 30_000);
 })();

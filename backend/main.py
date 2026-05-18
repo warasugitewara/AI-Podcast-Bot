@@ -53,10 +53,13 @@ async def main():
     playback = PlaybackWorker(playback_queue, bot, status_queue, playback_idle)
     bgm      = BgmWorker(bgm_prefetch_q, playback_queue, status_queue, playback_idle)
 
+    # BotからPlaybackWorkerを参照できるようにする（/volumeコマンド用）
+    bot.playback_worker = playback
+
     # ─── API サーバー ─────────────────────────────────────
     from api_server import build_app
     app    = build_app(bot, speech_queue, tts_queue, bgm_prefetch_q,
-                       music_request_queue, status_queue, speech)
+                       music_request_queue, status_queue, speech, playback)
     runner = web.AppRunner(app)
     await runner.setup()
     site   = web.TCPSite(runner, "127.0.0.1", BACKEND_API_PORT)
