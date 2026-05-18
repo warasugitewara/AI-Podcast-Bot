@@ -55,3 +55,6 @@ VC_EMPTY_TIMEOUT_SEC = int(_get("VC_EMPTY_TIMEOUT_SEC", "300"))
 
 # 音量設定（0.0〜2.0、1.0 が原音量）
 BGM_VOLUME = float(_get("BGM_VOLUME", "0.8"))
+
+# ダッシュボードURL（空文字の場合はアナウンスなし）
+DASHBOARD_URL = _get("DASHBOARD_URL", "").rstrip("/")

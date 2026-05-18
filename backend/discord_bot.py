@@ -12,6 +12,7 @@ from config import (
     DISCORD_TOKEN, DISCORD_GUILD_ID,
     DISCORD_VOICE_CHANNEL_ID,
     VC_EMPTY_TIMEOUT_SEC,
+    DASHBOARD_URL,
 )
 
 log = logging.getLogger("discord_bot")
@@ -348,12 +349,25 @@ class RadioBot(commands.Bot):
                 self._empty_timer = None
                 log.info(f"VC復帰 ({human_count}人)。タイマーキャンセル")
 
+            # ── このメンバーが今まさに入室したか判定 ──────────
+            just_joined = (
+                after.channel and after.channel.id == DISCORD_VOICE_CHANNEL_ID
+                and (before.channel is None or before.channel.id != DISCORD_VOICE_CHANNEL_ID)
+            )
+            if just_joined:
+                dashboard_line = (
+                    f"\n🖥 ダッシュボードから設定・キュー確認などができます → {DASHBOARD_URL}"
+                    if DASHBOARD_URL else ""
+                )
+                await self._notify_vc(
+                    f"👋 {member.display_name} さん、ようこそ！{dashboard_line}"
+                )
+
             # 停止中だった場合は放送再開を案内
             if not self.broadcast_active.is_set():
                 self.broadcast_active.set()
                 log.info("放送アクティブ状態に復帰")
                 await self._notify_vc(
-                    f"👋 {member.display_name} さんが入室しました。\n"
                     f"▶ `/start` で放送を再開できます。"
                 )
 
