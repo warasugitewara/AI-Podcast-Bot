@@ -60,7 +60,11 @@ class SpeechWorker:   # 後方互換でクラス名は維持
                 try:
                     req = self.music_request_queue.get_nowait()
                     self.music_request_queue.task_done()
-                    await self._trigger_music(req["query"], label=req.get("title", req["query"]))
+                    await self._trigger_music(
+                        req["query"],
+                        label=req.get("title", req["query"]),
+                        user_request=req.get("user_request", False),
+                    )
                     continue
                 except asyncio.QueueEmpty:
                     pass
@@ -116,11 +120,11 @@ class SpeechWorker:   # 後方互換でクラス名は維持
                 await asyncio.sleep(10)
 
     # ─── 音楽トリガー ─────────────────────────────────────────
-    async def _trigger_music(self, query: str, label: str = ""):
+    async def _trigger_music(self, query: str, label: str = "", user_request: bool = False):
         self.idle_event.clear()
         await self._push_status("music_queuing", label or query or "選曲中")
         log.info(f"音楽リクエスト → bgm_queue: {query!r}")
-        await self.bgm_queue.put({"query": query, "context": "", "enqueue": True})
+        await self.bgm_queue.put({"query": query, "context": "", "enqueue": True, "user_request": user_request})
 
     # ─── 台本生成 ─────────────────────────────────────────────
     async def _generate(self, job: dict):

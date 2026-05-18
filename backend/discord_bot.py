@@ -111,7 +111,7 @@ class PodcastCog(commands.Cog):
     @commands.command(name="music")
     async def cmd_music(self, ctx: commands.Context, *, query: str):
         """音楽リクエストをキューに追加する  例: !music lofi hip hop"""
-        await self.bot.music_request_queue.put({"query": query, "title": query})
+        await self.bot.music_request_queue.put({"query": query, "title": query, "user_request": True})
         try:
             await ctx.message.delete()
         except Exception:
@@ -121,7 +121,7 @@ class PodcastCog(commands.Cog):
     @app_commands.command(name="music", description="音楽リクエストをキューに追加する")
     @app_commands.describe(query="曲名やアーティスト名")
     async def slash_music(self, interaction: discord.Interaction, query: str):
-        await self.bot.music_request_queue.put({"query": query, "title": query})
+        await self.bot.music_request_queue.put({"query": query, "title": query, "user_request": True})
         await interaction.response.send_message(f"🎵 「{query}」を音楽キューに追加しました", ephemeral=True)
 
     # ─── CAST ────────────────────────────────────────────────

@@ -108,13 +108,14 @@ class BgmWorker:
                 job = await self.bgm_prefetch_q.get()
                 self.idle_event.clear()
 
-                query   = await _resolve_query(job)
-                enqueue = job.get("enqueue", True)
+                query        = await _resolve_query(job)
+                enqueue      = job.get("enqueue", True)
+                user_request = job.get("user_request", False)   # ユーザー指定URLはフィルタースキップ
 
                 await self._push_status("bgm_fetching", query[:60])
-                log.info(f"BGM取得開始: {query!r}")
+                log.info(f"BGM取得開始: {query!r} (user_request={user_request})")
 
-                bgm_path, title = await get_bgm(query)
+                bgm_path, title = await get_bgm(query, user_request=user_request)
 
                 if bgm_path and enqueue:
                     # ① アナウンスTTSを先にWAV生成してからキューへ

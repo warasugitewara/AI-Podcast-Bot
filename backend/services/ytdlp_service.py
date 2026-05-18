@@ -34,19 +34,19 @@ YDL_OPTS_BASE = {
 # ─── カラオケ/粗悪コンテンツのフィルター ──────────────────────
 # タイトルにこれらが含まれる動画を弾く
 _REJECT_RE = re.compile(
-    r"カラオケ|karaoke|off\s*vocal|オフボーカル"
-    r"|歌ってみた|うたってみた|singing\s*cover|sing\s*cover"
-    r"|cover|covered by"
+    r"カラオケ|\bkaraoke\b|off\s*vocal|オフボーカル"
+    r"|歌ってみた|うたってみた|\bsinging\s+cover\b|\bsing\s+cover\b"
+    r"|\bcovers?\b|covered by"           # 単語境界付き: discover/recovery等は除外
     r"|instrumental\s*version|\(inst[.\s)]|\[inst[.\s)]"
-    r"|piano ver|acoustic ver"
-    r"|remake|リメイク|弾いてみた|叩いてみた"
-    r"|tribute|reaction|lyrics?\s*video",
+    r"|piano\s+ver\b|acoustic\s+ver\b"
+    r"|\bremake\b|リメイク|弾いてみた|叩いてみた"
+    r"|\btribute\b|\blyrics?\s*video\b",
     re.IGNORECASE,
 )
 
 # チャンネル名に含まれる怪しいキーワード（カラオケ専門チャンネル等）
 _REJECT_CHANNEL_RE = re.compile(
-    r"karaoke|カラオケ|off\s*vocal|歌ってみた|うたってみた|instrumental|singing\s*cover",
+    r"\bkaraoke\b|カラオケ|off\s*vocal|歌ってみた|うたってみた|\binstrumental\b|\bsinging\s+cover\b",
     re.IGNORECASE,
 )
 
@@ -83,8 +83,10 @@ def _cache_path_for_id(video_id: str) -> Path | None:
     return None
 
 
-async def download_url(url: str, max_duration: int = 600) -> tuple[Path | None, str]:
-    """YouTube / YouTube Music の URL を直接ダウンロード。(path, title) を返す。"""
+async def download_url(url: str, max_duration: int = 600, user_request: bool = False) -> tuple[Path | None, str]:
+    """YouTube / YouTube Music の URL を直接ダウンロード。(path, title) を返す。
+    user_request=True の場合はフィルターをスキップ（ユーザーが意図的に指定）。
+    """
     opts = {
         **YDL_OPTS_BASE,
         "match_filter": yt_dlp.utils.match_filter_func(f"duration < {max_duration}"),
@@ -101,11 +103,11 @@ async def download_url(url: str, max_duration: int = 600) -> tuple[Path | None, 
         info = await asyncio.to_thread(_run)
         if not info:
             return None, ""
-        # URL直指定はユーザーが選んだものなのでカラオケでも許容するが警告は出す
-        if _is_bad_entry(info):
-            log.warning(f"URL指定の動画がカラオケ系の可能性: {info.get('title')!r}")
+        title = info.get("title", "")
+        if not user_request and _is_bad_entry(info):
+            log.warning(f"URLの動画がフィルター対象のためスキップ: {title!r}")
+            return None, ""
         cached = _cache_path_for_id(info["id"])
-        title  = info.get("title", "")
         if cached:
             log.info(f"URLダウンロード完了: {title!r} → {cached.name}")
             return cached, title
@@ -182,12 +184,14 @@ async def search_and_download(query: str, max_duration: int = 600) -> tuple[Path
     return None, ""
 
 
-async def get_bgm(query_or_url: str) -> tuple[Path | None, str]:
-    """URLなら直接DL、キーワードなら検索DL。キャッシュ確認付き。(path, title) を返す。"""
+async def get_bgm(query_or_url: str, user_request: bool = False) -> tuple[Path | None, str]:
+    """URLなら直接DL、キーワードなら検索DL。キャッシュ確認付き。(path, title) を返す。
+    user_request=True の場合はURLフィルターをスキップ。
+    """
     s = query_or_url.strip()
 
     if is_youtube_url(s):
-        return await download_url(s)
+        return await download_url(s, user_request=user_request)
 
     # キーワード検索: クエリのMD5でキャッシュ確認
     key = hashlib.md5(s.encode()).hexdigest()[:8]
