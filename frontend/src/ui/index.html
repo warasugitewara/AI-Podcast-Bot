@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🎙 AIラジオ コントロールパネル</title>
+  <style>
+    :root {
+      --bg: #0f0f13; --surface: #1a1a24; --border: #2e2e42;
+      --accent: #7c6af7; --accent2: #5de0c4; --danger: #f76a6a;
+      --text: #e8e8f0; --sub: #8888a8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 1rem 1.5rem; display: flex; align-items: center; gap: .75rem; }
+    header h1 { font-size: 1.2rem; font-weight: 600; }
+    .badge { font-size: .7rem; padding: .2rem .5rem; border-radius: 99px; background: var(--border); color: var(--sub); }
+    .badge.online { background: #1a3a2a; color: var(--accent2); }
+
+    main { max-width: 860px; margin: 2rem auto; padding: 0 1rem; display: grid; gap: 1.25rem; }
+
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
+    .card h2 { font-size: .85rem; font-weight: 600; color: var(--sub); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 1rem; }
+
+    /* ステータスバー */
+    #status-bar { display: flex; align-items: center; gap: .75rem; font-size: .9rem; }
+    #status-icon { font-size: 1.4rem; }
+    #status-text { flex: 1; }
+    #status-detail { font-size: .8rem; color: var(--sub); }
+
+    /* コントロール */
+    .controls { display: flex; flex-wrap: wrap; gap: .75rem; }
+    button { cursor: pointer; border: none; border-radius: 8px; padding: .6rem 1.1rem; font-size: .88rem; font-weight: 500; transition: opacity .15s; }
+    button:hover { opacity: .85; }
+    .btn-primary  { background: var(--accent);  color: #fff; }
+    .btn-success  { background: #2a7a5a;         color: #fff; }
+    .btn-danger   { background: var(--danger);   color: #fff; }
+    .btn-neutral  { background: var(--border);   color: var(--text); }
+
+    /* フォーム */
+    .form-row { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: .75rem; }
+    input, select, textarea {
+      background: var(--bg); border: 1px solid var(--border); color: var(--text);
+      border-radius: 8px; padding: .5rem .75rem; font-size: .88rem;
+    }
+    input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); }
+    input[type=range] { accent-color: var(--accent); flex: 1; }
+    label { font-size: .82rem; color: var(--sub); align-self: center; }
+
+    /* ログ */
+    #log { background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+           padding: .75rem; height: 180px; overflow-y: auto; font-size: .8rem; font-family: monospace; }
+    .log-entry { padding: .15rem 0; border-bottom: 1px solid var(--border); color: var(--sub); }
+    .log-entry .ev { color: var(--accent2); margin-right: .4rem; }
+  </style>
+</head>
+<body>
+<header>
+  <span>🎙</span>
+  <h1>AIラジオ コントロールパネル</h1>
+  <span class="badge" id="conn-badge">● 接続中...</span>
+</header>
+
+<main>
+  <!-- ステータス -->
+  <div class="card">
+    <h2>現在のステータス</h2>
+    <div id="status-bar">
+      <span id="status-icon">⏸</span>
+      <span id="status-text">待機中</span>
+      <span id="status-detail"></span>
+    </div>
+  </div>
+
+  <!-- メインコントロール -->
+  <div class="card">
+    <h2>コントロール</h2>
+    <div class="controls">
+      <button class="btn-primary" onclick="requestTalk()">🎤 トーク生成</button>
+      <button class="btn-success" onclick="requestBgm()">🎵 BGMリクエスト</button>
+      <button class="btn-danger"  onclick="stopPlay()">⏹ 停止</button>
+    </div>
+  </div>
+
+  <!-- トークリクエスト -->
+  <div class="card">
+    <h2>トークリクエスト</h2>
+    <div class="form-row">
+      <input id="talk-topic" type="text" placeholder="トピック（例: 最新AI技術）" style="flex:1">
+    </div>
+    <div class="form-row">
+      <label>話者</label>
+      <select id="speaker-id" style="flex:1"></select>
+    </div>
+    <div class="form-row">
+      <label>速度</label>
+      <input id="speed" type="range" min="0.5" max="2.0" step="0.05" value="1.0">
+      <span id="speed-val" style="font-size:.82rem;min-width:2.5rem;text-align:right">1.0</span>
+      <label>ピッチ</label>
+      <input id="pitch" type="range" min="-0.15" max="0.15" step="0.01" value="0.0">
+      <span id="pitch-val" style="font-size:.82rem;min-width:2.5rem;text-align:right">0.0</span>
+    </div>
+    <button class="btn-primary" onclick="requestTalk()">送信</button>
+  </div>
+
+  <!-- BGMリクエスト -->
+  <div class="card">
+    <h2>BGMリクエスト</h2>
+    <div class="form-row">
+      <input id="bgm-query" type="text" placeholder="YouTube検索キーワード（空白でAI自動選曲）" style="flex:1">
+      <button class="btn-success" onclick="requestBgm()">取得 & 再生</button>
+    </div>
+  </div>
+
+  <!-- イベントログ -->
+  <div class="card">
+    <h2>イベントログ</h2>
+    <div id="log"></div>
+  </div>
+</main>
+
+<script>
+// ─── SSE 接続 ─────────────────────────────────────────
+const evtSource = new EventSource("/events/");
+const badge = document.getElementById("conn-badge");
+
+evtSource.onopen = () => {
+  badge.textContent = "● 接続済み";
+  badge.className   = "badge online";
+};
+evtSource.onerror = () => {
+  badge.textContent = "● 切断";
+  badge.className   = "badge";
+};
+evtSource.addEventListener("status", (e) => {
+  const d = JSON.parse(e.data);
+  updateStatus(d.event, d.detail ?? "");
+  appendLog(d.event, d.detail ?? "");
+});
+
+// ─── ステータス表示 ────────────────────────────────────
+const ICONS = {
+  connected:"🟢", idle:"⏸", playing:"▶️", generating_talk:"💭",
+  tts_generating:"🗣", bgm_fetching:"🔍", bgm_ready:"✅", bgm_failed:"❌",
+};
+function updateStatus(event, detail) {
+  document.getElementById("status-icon").textContent = ICONS[event] ?? "⚙️";
+  document.getElementById("status-text").textContent = event.replace(/_/g," ");
+  document.getElementById("status-detail").textContent = detail;
+}
+
+// ─── ログ ──────────────────────────────────────────────
+function appendLog(event, detail) {
+  const log = document.getElementById("log");
+  const el  = document.createElement("div");
+  el.className = "log-entry";
+  const ts = new Date().toLocaleTimeString("ja-JP");
+  el.innerHTML = `<span style="color:var(--sub)">${ts}</span> <span class="ev">${event}</span>${detail}`;
+  log.prepend(el);
+  if (log.children.length > 100) log.lastElementChild.remove();
+}
+
+// ─── スライダー表示 ────────────────────────────────────
+document.getElementById("speed").addEventListener("input", (e) => {
+  document.getElementById("speed-val").textContent = parseFloat(e.target.value).toFixed(2);
+});
+document.getElementById("pitch").addEventListener("input", (e) => {
+  document.getElementById("pitch-val").textContent = parseFloat(e.target.value).toFixed(2);
+});
+
+// ─── API 呼び出し ──────────────────────────────────────
+async function post(path, body) {
+  const r = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return r.json();
+}
+
+async function requestTalk() {
+  const topic     = document.getElementById("talk-topic").value || "最新テクノロジー";
+  const speakerId = parseInt(document.getElementById("speaker-id").value) || undefined;
+  const speed     = parseFloat(document.getElementById("speed").value);
+  const pitch     = parseFloat(document.getElementById("pitch").value);
+  const res = await post("/api/talk", { topic, speaker_id: speakerId, speed, pitch });
+  appendLog("queued_talk", topic);
+}
+
+async function requestBgm() {
+  const query = document.getElementById("bgm-query").value;
+  const res   = await post("/api/bgm", { query, enqueue: true });
+  appendLog("queued_bgm", query || "(AI自動選曲)");
+}
+
+async function stopPlay() {
+  await post("/api/stop", {});
+  appendLog("stop_requested", "");
+}
+
+// ─── 話者リスト取得 ────────────────────────────────────
+async function loadSpeakers() {
+  try {
+    const speakers = await fetch("/api/speakers").then(r => r.json());
+    const sel = document.getElementById("speaker-id");
+    for (const sp of speakers) {
+      for (const style of sp.styles) {
+        const opt = document.createElement("option");
+        opt.value       = style.id;
+        opt.textContent = `${sp.name}（${style.name}）`;
+        sel.appendChild(opt);
+      }
+    }
+  } catch(e) {
+    console.warn("話者リスト取得失敗:", e);
+  }
+}
+loadSpeakers();
+</script>
+</body>
+</html>
