@@ -125,23 +125,29 @@ class SpeechWorker:   # 後方互換でクラス名は維持
                     log.info(f"クールタイム待機: {remaining:.0f}秒")
                     await self._push_status("cooldown", f"{remaining:.0f}秒")
 
-                    # アイドル中ならBGMで無音を埋める
-                    if self.idle_event.is_set() and self.tts_queue.qsize() == 0:
-                        log.info("クールタイム中 → BGMを自動挿入")
-                        await self._trigger_music("", label="BGM（クールタイム中）")
+                    # クールタイム確定時点で即BGMをプリフェッチ開始
+                    # （TTS再生中でも裏でダウンロードさせ、再生終了後の無音ギャップをゼロにする）
+                    log.info("クールタイム確定 → BGMをプリフェッチ開始")
+                    await self.bgm_queue.put({"query": "", "enqueue": True})
 
-                    # カウントダウン（途中でアイドルになってもBGM追加挿入）
+                    # カウントダウン（途中でアイドルかつキューが空になったら追加BGM）
                     deadline = time.monotonic() + remaining
+                    bgm_queued = 1  # 上で1件プリフェッチ済み
                     while True:
                         left = deadline - time.monotonic()
                         if left <= 0:
                             break
                         await self._push_status("cooldown", f"{left:.0f}秒")
-                        # 無音になったら追加BGM
-                        if self.idle_event.is_set() and self.tts_queue.qsize() == 0:
+                        # 完全無音かつプリフェッチが吐き切られていたら追加挿入
+                        if (self.idle_event.is_set()
+                                and self.tts_queue.qsize() == 0
+                                and bgm_queued == 0):
                             log.info("クールタイム中に無音検知 → BGM追加挿入")
                             await self._trigger_music("", label="BGM（クールタイム中）")
-                        await asyncio.sleep(min(5.0, left))
+                            bgm_queued += 1
+                        elif not self.idle_event.is_set():
+                            bgm_queued = 0  # 何か再生されたらカウントをリセット
+                        await asyncio.sleep(min(1.0, left))  # 1秒ごとにチェック（旧5秒から短縮）
 
                 # 生成前にビジーマーク
                 self.idle_event.clear()
@@ -271,8 +277,11 @@ class SpeechWorker:   # 後方互換でクラス名は維持
                     })
             else:
                 # mode別デフォルト速度: news=0.93(落ち着き)、chat=1.05(テンポよく)
+                # 手動リクエスト(auto=False)の場合は1.0倍速（自動より落ち着いて聞かせる）
                 _MODE_SPEED = {"news": 0.93, "chat": 1.05, "transition": 1.0}
-                speed = job.get("speed", _MODE_SPEED.get(mode, 1.0))
+                is_auto = job.get("auto", False)
+                default_speed = _MODE_SPEED.get(mode, 1.0) if is_auto else 1.0
+                speed = job.get("speed", default_speed)
                 pitch = job.get("pitch", 0.0)
                 for line in lines:
                     sid = character_manager.speaker_id_for(line["speaker"])

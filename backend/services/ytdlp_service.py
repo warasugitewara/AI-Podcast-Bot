@@ -54,7 +54,11 @@ _REJECT_RE = re.compile(
     r"|instrumental\s*version|\(inst[.\s)]|\[inst[.\s)]"
     r"|piano\s+ver\b|acoustic\s+ver\b"
     r"|\bremake\b|リメイク|弾いてみた|叩いてみた"
-    r"|\btribute\b|\blyrics?\s*video\b",
+    r"|\btribute\b|\blyrics?\s*video\b"
+    r"|総集編|効果音|\bsound\s+effects?\b|SE集"   # ゲームBGM総集編・効果音を除外
+    r"|\bASMR\b"                                  # ASMR除外
+    r"|ゲーム\s*(?:効果音|SE)|game\s+sound\s+effects?"  # ゲーム効果音
+    r"|BGM集|BGM\s*メドレー",
     re.IGNORECASE,
 )
 
