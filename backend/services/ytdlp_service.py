@@ -58,7 +58,11 @@ _REJECT_RE = re.compile(
     r"|総集編|効果音|\bsound\s+effects?\b|SE集"   # ゲームBGM総集編・効果音を除外
     r"|\bASMR\b"                                  # ASMR除外
     r"|ゲーム\s*(?:効果音|SE)|game\s+sound\s+effects?"  # ゲーム効果音
-    r"|BGM集|BGM\s*メドレー",
+    r"|BGM集|BGM\s*メドレー"
+    r"|\bAI\s*(?:music|song|cover|generated|作曲|生成)"  # AI生成音楽を除外
+    r"|AI(?:で|が)(?:作った|生成した|作曲した)"
+    r"|\bsuno\b|\budio\b|\baisong\b"              # AI音楽生成サービス名
+    r"|\[AI\]|\(AI\)|【AI】",
     re.IGNORECASE,
 )
 

@@ -91,6 +91,34 @@ class PodcastCog(commands.Cog):
         self.bot.stop()
         await interaction.response.send_message("⏹ 停止しました", ephemeral=True)
 
+    # ─── SKIP ────────────────────────────────────────────────
+    @commands.command(name="skip", aliases=["s"])
+    async def cmd_skip(self, ctx: commands.Context):
+        """再生中のBGMをスキップして次へ進む（トークはスキップ不可）"""
+        pw = self.bot.playback_worker
+        if pw and pw.current_job_type == "bgm":
+            self.bot.stop()
+            try:
+                await ctx.message.delete()
+            except Exception:
+                pass
+            await ctx.send("⏭️ スキップしました", delete_after=5)
+        elif pw and pw.current_job_type == "tts":
+            await ctx.send("🎙️ トーク中はスキップできません。", delete_after=5)
+        else:
+            await ctx.send("現在BGMは再生されていません。", delete_after=5)
+
+    @app_commands.command(name="skip", description="再生中のBGMをスキップして次へ進む")
+    async def slash_skip(self, interaction: discord.Interaction):
+        pw = self.bot.playback_worker
+        if pw and pw.current_job_type == "bgm":
+            self.bot.stop()
+            await interaction.response.send_message("⏭️ スキップしました", ephemeral=True)
+        elif pw and pw.current_job_type == "tts":
+            await interaction.response.send_message("🎙️ トーク中はスキップできません。", ephemeral=True)
+        else:
+            await interaction.response.send_message("現在BGMは再生されていません。", ephemeral=True)
+
     # ─── TOPIC ───────────────────────────────────────────────
     @commands.command(name="topic")
     async def cmd_topic(self, ctx: commands.Context, *, topic: str):
