@@ -79,9 +79,9 @@ class SpeechWorker:   # 後方互換でクラス名は維持
                         label=req.get("title", req["query"]),
                         user_request=req.get("user_request", False),
                     )
-                    # 曲が終わるまで待って次へ（BGM中の先読みはしない：ユーザー指定曲優先）
+                    # 曲が終わるまで待つ。continueしない → 必ずトークを1エピソード挟む
+                    # （次のリクエストは次のループ先頭で優先1として拾われる）
                     await self._wait_full_idle()
-                    continue
                 except asyncio.QueueEmpty:
                     pass
 
