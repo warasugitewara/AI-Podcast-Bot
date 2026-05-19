@@ -101,8 +101,8 @@ def _cache_path_for_id(video_id: str) -> Path | None:
     return None
 
 
-async def download_url(url: str, max_duration: int = 600, user_request: bool = False) -> tuple[Path | None, str]:
-    """YouTube / YouTube Music の URL を直接ダウンロード。(path, title) を返す。
+async def download_url(url: str, max_duration: int = 600, user_request: bool = False) -> tuple[Path | None, str, str]:
+    """YouTube / YouTube Music の URL を直接ダウンロード。(path, title, url) を返す。
     user_request=True の場合はフィルターをスキップ（ユーザーが意図的に指定）。
     """
     opts = {
@@ -124,20 +124,21 @@ async def download_url(url: str, max_duration: int = 600, user_request: bool = F
         title = info.get("title", "")
         if not user_request and _is_bad_entry(info):
             log.warning(f"URLの動画がフィルター対象のためスキップ: {title!r}")
-            return None, ""
+            return None, "", ""
         cached = _cache_path_for_id(info["id"])
+        video_url = info.get("webpage_url") or url
         if cached:
             _mark_played(info["id"])
             log.info(f"URLダウンロード完了: {title!r} → {cached.name}")
-            return cached, title
+            return cached, title, video_url
     except Exception as e:
         log.error(f"URLダウンロード失敗 ({url}): {e}")
-    return None, ""
+    return None, "", ""
 
 
-async def search_and_download(query: str, max_duration: int = 600) -> tuple[Path | None, str]:
+async def search_and_download(query: str, max_duration: int = 600) -> tuple[Path | None, str, str]:
     """
-    クエリでYouTube検索し、カラオケ等を除外した最初の曲をDLして (path, title) を返す。
+    クエリでYouTube検索し、カラオケ等を除外した最初の曲をDLして (path, title, url) を返す。
     最大 SEARCH_CANDIDATES 件を取得してフィルタリング。
     """
     SEARCH_CANDIDATES = 8
@@ -171,7 +172,7 @@ async def search_and_download(query: str, max_duration: int = 600) -> tuple[Path
         entries = await asyncio.to_thread(_fetch_meta)
         if not entries:
             log.warning(f"検索結果なし: {query!r}")
-            return None, ""
+            return None, "", ""
 
         # 候補をフィルタリング（最近再生済み除外）してランダムに選ぶ
         good_fresh = [
@@ -189,29 +190,31 @@ async def search_and_download(query: str, max_duration: int = 600) -> tuple[Path
             chosen = random.choice([e for e in entries if e] or [entries[0]])
             log.warning(f"全候補がフィルター対象。ランダムで選択: {chosen.get('title')!r}")
         else:
-            return None, ""
+            return None, "", ""
 
         video_url = chosen.get("url") or f"https://www.youtube.com/watch?v={chosen['id']}"
+        yt_url    = f"https://www.youtube.com/watch?v={chosen['id']}"
         log.info(f"BGM選択: {chosen.get('title')!r} (フィルター通過)")
 
         info = await asyncio.to_thread(_download_one, video_url)
         if not info:
-            return None, ""
+            return None, "", ""
 
         cached = _cache_path_for_id(info["id"])
         title  = info.get("title", query)
+        final_url = info.get("webpage_url") or yt_url
         if cached:
             _mark_played(info["id"])
             log.info(f"BGMダウンロード完了: {title!r} → {cached.name}")
-            return cached, title
+            return cached, title, final_url
 
     except Exception as e:
         log.error(f"yt-dlp失敗 ({query}): {e}")
-    return None, ""
+    return None, "", ""
 
 
-async def get_bgm(query_or_url: str, user_request: bool = False) -> tuple[Path | None, str]:
-    """URLなら直接DL、キーワードなら検索DL。(path, title) を返す。
+async def get_bgm(query_or_url: str, user_request: bool = False) -> tuple[Path | None, str, str]:
+    """URLなら直接DL、キーワードなら検索DL。(path, title, url) を返す。
     user_request=True の場合はURLフィルターをスキップ。
     """
     s = query_or_url.strip()

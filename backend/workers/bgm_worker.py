@@ -301,12 +301,14 @@ class BgmWorker:
                 await self._push_status("bgm_fetching", query[:60])
                 log.info(f"BGM取得開始: {query!r} (user_request={user_request})")
 
-                bgm_path, title = await get_bgm(query, user_request=user_request)
+                bgm_path, title, bgm_url = await get_bgm(query, user_request=user_request)
 
                 if bgm_path and enqueue:
                     # BGMジャンルを番組メモリに記録
                     from services.program_memory import program_memory
                     program_memory.add_genre(query)
+                    program_memory.now_playing_title = title or ""
+                    program_memory.now_playing_url   = bgm_url or ""
 
                     # ① 曲前アナウンスTTSを先に投入
                     if title:

@@ -236,6 +236,33 @@ class PodcastCog(commands.Cog):
         result = character_manager.shuffle()
         await interaction.response.send_message(f"🎲 キャストをシャッフル: **{result['label']}**", ephemeral=True)
 
+    # ─── NOW PLAYING ──────────────────────────────────────────
+    @commands.command(name="nowplaying", aliases=["np"])
+    async def cmd_nowplaying(self, ctx: commands.Context):
+        """現在再生中の曲のタイトルとURLを表示する"""
+        from services.program_memory import program_memory
+        title = program_memory.now_playing_title
+        url   = program_memory.now_playing_url
+        if title and url:
+            await ctx.send(f"🎵 **{title}**\n{url}", delete_after=30)
+        elif title:
+            await ctx.send(f"🎵 **{title}**\n（URLが取得できませんでした）", delete_after=15)
+        else:
+            await ctx.send("🎵 現在BGMは再生されていません。", delete_after=10)
+
+    @app_commands.command(name="nowplaying", description="現在再生中の曲のタイトルとURLを表示する")
+    async def slash_nowplaying(self, interaction: discord.Interaction):
+        from services.program_memory import program_memory
+        title = program_memory.now_playing_title
+        url   = program_memory.now_playing_url
+        if title and url:
+            await interaction.response.send_message(f"🎵 **{title}**\n{url}", ephemeral=True)
+        elif title:
+            await interaction.response.send_message(
+                f"🎵 **{title}**\n（URLが取得できませんでした）", ephemeral=True)
+        else:
+            await interaction.response.send_message("🎵 現在BGMは再生されていません。", ephemeral=True)
+
 
 # ─── Bot 本体 ──────────────────────────────────────────────────
 class RadioBot(commands.Bot):

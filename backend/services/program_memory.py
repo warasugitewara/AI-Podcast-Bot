@@ -21,6 +21,9 @@ class ProgramMemory:
     used_bgm_queries: list[str] = field(default_factory=list)  # 直近15BGMクエリ
     episode_count:    int       = 0
     _last_topic:      str       = ""
+    # 再生中BGM情報
+    now_playing_title: str      = ""
+    now_playing_url:   str      = ""
 
     _TOPIC_MAX     = 40
     _GENRE_MAX     = 3
