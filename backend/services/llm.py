@@ -260,19 +260,67 @@ _TOPIC_POOL = [
     "日本の伝統文化が現代に与える影響",
     "祭りと地域コミュニティの話",
     "日本語の面白い言葉・表現の話",
+    # 追加: バラエティ・トレンド
+    "最近バズったSNSトレンドの話",
+    "推し活・ファンカルチャーの話",
+    "ひとり時間の過ごし方トレンド",
+    "進化する日本のコンビニ文化",
+    "インフルエンサーと広告の変化",
+    "AIが変える仕事の未来",
+    "ペットと暮らすライフスタイルの変化",
+    "マンガ・アニメのグローバル展開",
+    "お笑いと笑いの科学",
+    "音楽フェスと野外イベント文化",
+    "サウナブームと健康志向の話",
+    "自転車・アウトドアブームの話",
+    "ガジェットオタクの最新こだわり",
+    "ファッションとサステナビリティ",
+    "読書・電子書籍・オーディオブックの変化",
+    "ポッドキャスト・音声コンテンツの台頭",
+    "日本のゲームが世界に与えた影響",
+    "リアル脱出ゲームと体験型エンタメ",
+    "スポーツ観戦とスタジアム文化の進化",
+    "食べ歩きと観光フードカルチャー",
+    "深夜ラジオと音声エンタメの歴史",
+    "話題の映画・ドラマの裏話や制作秘話",
+    "バーチャルアイドルとデジタルタレント",
+    "日本語ラップとヒップホップカルチャー",
+    "テクノロジーが変えるスポーツ観戦体験",
+    "宇宙ビジネスと民間ロケットの今",
 ]
 
+# シャッフル済みインデックスリスト（BGMプールと同じ方式でサイクル管理）
+_topic_order: list[int] = []
+_topic_pos:   int = 0
+
+def _ensure_topic_order():
+    global _topic_order
+    if not _topic_order:
+        _topic_order = list(range(len(_TOPIC_POOL)))
+        random.shuffle(_topic_order)
+
 def pick_random_topic(avoid: list[str] | None = None) -> str:
-    """毎回異なるジャンルからランダムにトピックを選ぶ。avoid リストの話題は優先的に除外。"""
-    if avoid:
-        avoid_lower = {t.lower() for t in avoid}
-        candidates = [
-            t for t in _TOPIC_POOL
-            if not any(t.lower() in av or av in t.lower() for av in avoid_lower)
-        ]
-        if candidates:
-            return random.choice(candidates)
-    return random.choice(_TOPIC_POOL)
+    """シャッフルサイクルでトピックを選ぶ。全件使い切るまで同じトピックが出ない。
+    avoid リストに含まれるトピックはスキップし、次の候補を探す。"""
+    global _topic_pos
+    _ensure_topic_order()
+    avoid_lower = {t.lower() for t in avoid} if avoid else set()
+
+    # サイクル順にavoidを除いた最初の候補を返す
+    for _ in range(len(_TOPIC_POOL)):
+        idx = _topic_order[_topic_pos % len(_topic_order)]
+        _topic_pos += 1
+        # 一周したらシャッフルし直す
+        if _topic_pos % len(_topic_order) == 0:
+            random.shuffle(_topic_order)
+        topic = _TOPIC_POOL[idx]
+        if not avoid_lower or not any(
+            topic.lower() in av or av in topic.lower() for av in avoid_lower
+        ):
+            return topic
+
+    # 全件がavoid対象（理論上起きないが念のため）
+    return _TOPIC_POOL[0]
 
 
 # ─── システムプロンプト ────────────────────────────────────
@@ -318,11 +366,13 @@ def _build_dialogue_system(chars: list, has_context: bool) -> str:
 
 # ─── 生成関数 ─────────────────────────────────────────────
 
-async def generate_talk(topic: str, context: str = "") -> str:
-    """ソロトーク生成"""
+async def generate_talk(topic: str, context: str = "", avoid: list[str] | None = None) -> tuple[str, str]:
+    """ソロトーク生成。戻り値: (テキスト, 使用トピック)"""
     if not _can_request():
-        return ""
-    user_content = f"トピック: {topic}" if topic else f"トピック: {pick_random_topic()}"
+        return "", ""
+    from services.program_memory import program_memory as _pm
+    resolved = topic.strip() or pick_random_topic(avoid=avoid or _pm.recent_topics)
+    user_content = f"トピック: {resolved}"
     if context:
         user_content += f"\n【参考情報】{context}"
 
@@ -336,7 +386,7 @@ async def generate_talk(topic: str, context: str = "") -> str:
         max_tokens=400,
         temperature=0.85,
     )
-    return resp.choices[0].message.content.strip()
+    return resp.choices[0].message.content.strip(), resolved
 
 
 async def generate_dialogue(

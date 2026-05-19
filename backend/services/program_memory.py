@@ -22,7 +22,7 @@ class ProgramMemory:
     episode_count:    int       = 0
     _last_topic:      str       = ""
 
-    _TOPIC_MAX     = 20
+    _TOPIC_MAX     = 40
     _GENRE_MAX     = 3
     _BGM_QUERY_MAX = 15
 

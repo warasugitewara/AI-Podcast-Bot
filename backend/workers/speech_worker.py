@@ -268,13 +268,14 @@ class SpeechWorker:   # 後方互換でクラス名は維持
                     await self.bgm_queue.put({"query": pick_bgm_query(), "enqueue": True})
                     return
                 log.warning("台本が空。ソロにフォールバック")
-                text = await generate_talk(topic=topic, context=context)
+                text, solo_topic = await generate_talk(topic=topic, context=context)
                 if text:
                     await self.tts_queue.put({
                         "text": text,
                         "speaker_id": chars[0].speaker_id if chars else None,
                         "speed": 1.0, "pitch": 0.0,
                     })
+                    program_memory.add_topic(solo_topic)  # フォールバック時もトピック記録
             else:
                 # mode別デフォルト速度: news=0.93(落ち着き)、chat=1.05(テンポよく)
                 # 手動リクエスト(auto=False)の場合は1.0倍速（自動より落ち着いて聞かせる）
