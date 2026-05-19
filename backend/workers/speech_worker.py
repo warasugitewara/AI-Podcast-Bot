@@ -270,7 +270,9 @@ class SpeechWorker:   # 後方互換でクラス名は維持
                         "speed": 1.0, "pitch": 0.0,
                     })
             else:
-                speed = job.get("speed", 1.0)
+                # mode別デフォルト速度: news=0.93(落ち着き)、chat=1.05(テンポよく)
+                _MODE_SPEED = {"news": 0.93, "chat": 1.05, "transition": 1.0}
+                speed = job.get("speed", _MODE_SPEED.get(mode, 1.0))
                 pitch = job.get("pitch", 0.0)
                 for line in lines:
                     sid = character_manager.speaker_id_for(line["speaker"])

@@ -22,8 +22,12 @@ class VoicevoxService:
         self.speaker_id = speaker_id
         TTS_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    def _cache_path(self, text: str, speaker_id: int) -> Path:
-        key = hashlib.md5(f"{speaker_id}:{text}".encode()).hexdigest()
+    def _cache_path(self, text: str, speaker_id: int, speed: float = 1.0, pitch: float = 0.0) -> Path:
+        # speed/pitch がデフォルト以外の場合はキャッシュキーに含める
+        key_str = f"{speaker_id}:{text}"
+        if speed != 1.0 or pitch != 0.0:
+            key_str += f":{speed:.2f}:{pitch:.2f}"
+        key = hashlib.md5(key_str.encode()).hexdigest()
         return TTS_CACHE_DIR / f"{key}.wav"
 
     async def synthesize(
@@ -37,7 +41,7 @@ class VoicevoxService:
         """テキストをWAVファイルに変換してPathを返す。キャッシュヒット時は即座に返す。
         500エラー時は最大 _retries 回リトライする（1秒間隔）。"""
         sid = speaker_id or self.speaker_id
-        cached = self._cache_path(text, sid)
+        cached = self._cache_path(text, sid, speed, pitch)
         if cached.exists():
             log.debug(f"TTSキャッシュヒット: {cached.name}")
             return cached

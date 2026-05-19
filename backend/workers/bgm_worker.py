@@ -2,7 +2,7 @@
 BgmWorker: bgm_prefetch_queue からクエリ/URLを取り出し、
 yt-dlp で音楽をダウンロード → playback_queue に投入する。
 - YouTube URL / YouTube Music URL の直接ダウンロードに対応
-- クエリ未指定時: 30%の確率でYouTube Musicトレンド曲、残りはプリセット
+- クエリ未指定時: 20%でYouTube Musicトレンド、15%で時間帯別クエリ、残りはプリセット
 - 曲再生前にアクティブキャラクターのボイスで曲名アナウンスを挿入
 """
 import asyncio
@@ -16,6 +16,50 @@ from services.voicevox import VoicevoxService
 log = logging.getLogger("bgm_worker")
 
 _voicevox = VoicevoxService()   # シングルトン（毎回newしない）
+
+# ─── 時間帯別BGMクエリ ─────────────────────────────────────
+_TIME_PERIOD_QUERIES: dict[str, list[str]] = {
+    "朝": [
+        "morning positive energy music official audio",
+        "upbeat morning coffee jazz official",
+        "energetic morning vibes official audio",
+        "sunrise motivation music chill official",
+        "morning bossa nova cafe official audio",
+    ],
+    "昼前": [
+        "midday chill beats official audio",
+        "lunch break jazz piano official",
+        "noon lofi chill official audio",
+        "daytime acoustic background official",
+    ],
+    "午後": [
+        "afternoon chill music official audio",
+        "relaxing afternoon lofi beats official",
+        "afternoon coffeehouse jazz official",
+        "mellow afternoon vibes official audio",
+    ],
+    "夕方": [
+        "sunset chill music official audio",
+        "evening lofi hip hop official",
+        "golden hour ambient music official",
+        "dusk jazz piano background official",
+        "evening city pop official audio",
+    ],
+    "夜": [
+        "night chill lofi music official audio",
+        "late evening smooth jazz official",
+        "nighttime relax beats official",
+        "night city pop official audio",
+        "evening neo soul official audio",
+    ],
+    "深夜": [
+        "deep night ambient music official",
+        "midnight lofi chill official audio",
+        "late night downtempo official",
+        "midnight jazz soft piano official",
+        "dark ambient night music official",
+    ],
+}
 
 # ─── キャラクター別アナウンステンプレート ─────────────────────
 # 理由なし版
@@ -182,8 +226,8 @@ async def _resolve_query(job: dict) -> str:
 
     r = random.random()
 
-    # 25%: YouTube Music トレンド JP
-    if r < 0.25:
+    # 25%→10%: YouTube Music トレンド JP
+    if r < 0.10:
         try:
             from services.ytmusic_service import pick_trending_url
             url = await pick_trending_url(country="JP")
@@ -193,8 +237,8 @@ async def _resolve_query(job: dict) -> str:
         except Exception as e:
             log.debug(f"JPトレンド取得スキップ: {e}")
 
-    # 25%〜40%: YouTube Music トレンド US / KR ランダム
-    elif r < 0.40:
+    # 10%〜20%: YouTube Music トレンド US / KR ランダム
+    elif r < 0.20:
         try:
             from services.ytmusic_service import pick_trending_url
             country = random.choice(["US", "KR", "GB"])
@@ -206,7 +250,18 @@ async def _resolve_query(job: dict) -> str:
         except Exception as e:
             log.debug(f"海外トレンド取得スキップ: {e}")
 
-    # 残り60%: プリセットプール（最近使用済みを除外・最大10回試す）
+    # 20%〜35%: 時間帯別クエリ（朝/夕/夜など）
+    elif r < 0.35:
+        mood = program_memory.current_mood
+        tpq = _TIME_PERIOD_QUERIES.get(mood, [])
+        if tpq:
+            candidate = random.choice(tpq)
+            if not program_memory.is_recent_bgm_query(candidate):
+                program_memory.add_bgm_query(candidate)
+                log.info(f"時間帯別選曲 ({mood}): {candidate!r}")
+                return candidate
+
+    # 残り65%: プリセットプール（最近使用済みを除外・最大10回試す）
     for _ in range(10):
         candidate = pick_bgm_query()
         if not program_memory.is_recent_bgm_query(candidate):

@@ -6,6 +6,7 @@ import asyncio
 import logging
 
 from services.voicevox import VoicevoxService
+from services.pronunciation import preprocess as _preprocess
 
 log = logging.getLogger("tts_worker")
 
@@ -23,7 +24,7 @@ class TtsWorker:
         while True:
             try:
                 job = await self.tts_queue.get()
-                text       = job["text"]
+                text       = _preprocess(job["text"])   # 英語→カタカナ前処理
                 speaker_id = job.get("speaker_id")
                 speed      = job.get("speed", 1.0)
                 pitch      = job.get("pitch", 0.0)

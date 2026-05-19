@@ -7,8 +7,11 @@
 - 直近使用BGMクエリを追跡して同じ曲の繰り返しを防ぐ
 """
 from __future__ import annotations
-import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from dataclasses import dataclass, field
+
+_JST = ZoneInfo("Asia/Tokyo")
 
 
 @dataclass
@@ -61,7 +64,7 @@ class ProgramMemory:
 
     @property
     def current_mood(self) -> str:
-        h = time.localtime().tm_hour
+        h = datetime.now(_JST).hour
         if   0 <= h <  6: return "深夜"
         elif 6 <= h < 10: return "朝"
         elif 10 <= h < 13: return "昼前"
