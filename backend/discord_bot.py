@@ -364,6 +364,17 @@ class RadioBot(commands.Bot):
         if self.voice_client and self.voice_client.is_playing():
             self.voice_client.stop()
 
+    def flush_queues(self):
+        """playback_queue / bgm_prefetch_q に溜まった未再生アイテムを全破棄"""
+        for q in (self.playback_queue, self.bgm_prefetch_q, self.music_request_queue):
+            while not q.empty():
+                try:
+                    q.get_nowait()
+                    q.task_done()
+                except Exception:
+                    break
+        log.info("全キューをフラッシュしました")
+
     # ─── ステータス通知 ─────────────────────────────────────
     async def _push_status(self, event: str, detail: str = ""):
         try:
@@ -431,7 +442,8 @@ class RadioBot(commands.Bot):
         try:
             await asyncio.sleep(VC_EMPTY_TIMEOUT_SEC)
             log.info("VC空室タイムアウト。放送を一時停止します")
-            self.stop()                      # 現在の再生を停止
+            self.stop()                      # 再生中の音声を即停止
+            self.flush_queues()              # キューに積まれた次の曲・TTSも全破棄
             self.broadcast_active.clear()    # ContentScheduler の新規生成を停止
             await self._push_status("paused_empty_vc", "VC空室のため停止")
             await self._notify_vc(
