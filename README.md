@@ -85,6 +85,7 @@ Discord VCユーザー
 ## 🌡️ ヘルス監視
 
 `GET /health` エンドポイントで 6 サブシステムの状態を JSON で返します。
+`https://your.domain.url/api/health`やダッシュボードで確認可能。
 
 ```json
 {
