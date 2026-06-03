@@ -294,6 +294,16 @@ def build_app(bot, speech_queue, tts_queue, bgm_prefetch_q, music_request_queue,
             "min_interval_sec": NIM_MIN_INTERVAL_SEC,
         })
 
+    async def get_health(request: web.Request):
+        """システム全体のヘルス状態を返す（キャッシュ優先、古ければ再収集）"""
+        from services.health_manager import health_manager
+        import time
+        report = health_manager.last_report
+        # キャッシュが90秒以上古い、または未取得なら再収集
+        if report is None or (time.time() - report.timestamp) > 90:
+            report = await health_manager.collect()
+        return web.json_response(report.to_dict())
+
     app.router.add_get("/status",           get_status)
     app.router.add_get("/queue",            get_queue)
     app.router.add_get("/speakers",         get_speakers)
@@ -302,6 +312,7 @@ def build_app(bot, speech_queue, tts_queue, bgm_prefetch_q, music_request_queue,
     app.router.add_get("/casts",            get_casts_list)
     app.router.add_get("/chars",            get_chars)
     app.router.add_get("/nim-usage",        get_nim_usage)
+    app.router.add_get("/health",           get_health)
     app.router.add_get("/trending",         get_trending)
     app.router.add_get("/bgm-volume",       get_bgm_volume)
     app.router.add_post("/talk",            post_talk)

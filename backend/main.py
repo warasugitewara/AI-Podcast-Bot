@@ -13,6 +13,7 @@ from workers.speech_worker import SpeechWorker
 from workers.tts_worker import TtsWorker
 from workers.playback_worker import PlaybackWorker
 from workers.bgm_worker import BgmWorker
+from services.health_manager import health_manager
 
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(
@@ -56,6 +57,14 @@ async def main():
     # BotからPlaybackWorkerを参照できるようにする（/volumeコマンド用）
     bot.playback_worker = playback
 
+    # ─── HealthManager への依存注入 ───────────────────────
+    health_manager.inject(
+        bot=bot,
+        tts_queue=tts_queue,
+        playback_queue=playback_queue,
+        playback_worker=playback,
+    )
+
     # ─── API サーバー ─────────────────────────────────────
     from api_server import build_app
     app    = build_app(bot, speech_queue, tts_queue, bgm_prefetch_q,
@@ -67,12 +76,14 @@ async def main():
     log.info(f"APIサーバー起動: http://127.0.0.1:{BACKEND_API_PORT}")
 
     # ─── タスク起動 ──────────────────────────────────────
+    from workers.uptime_worker import uptime_worker
     tasks = [
-        asyncio.create_task(speech.run(),    name="content_scheduler"),
-        asyncio.create_task(tts.run(),       name="tts_worker"),
-        asyncio.create_task(playback.run(),  name="playback_worker"),
-        asyncio.create_task(bgm.run(),       name="bgm_worker"),
-        asyncio.create_task(bot.start_bot(), name="discord_bot"),
+        asyncio.create_task(speech.run(),                    name="content_scheduler"),
+        asyncio.create_task(tts.run(),                       name="tts_worker"),
+        asyncio.create_task(playback.run(),                  name="playback_worker"),
+        asyncio.create_task(bgm.run(),                       name="bgm_worker"),
+        asyncio.create_task(bot.start_bot(),                 name="discord_bot"),
+        asyncio.create_task(uptime_worker(health_manager),   name="uptime_worker"),
     ]
     log.info("全ワーカー起動完了")
 

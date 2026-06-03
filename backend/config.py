@@ -58,3 +58,6 @@ BGM_VOLUME = float(_get("BGM_VOLUME", "0.8"))
 
 # ダッシュボードURL（空文字の場合はアナウンスなし）
 DASHBOARD_URL = _get("DASHBOARD_URL", "").rstrip("/")
+
+# Uptime Kuma Push Monitor URL（空文字で無効）
+UPTIME_KUMA_PUSH_URL = _get("UPTIME_KUMA_PUSH_URL", "")

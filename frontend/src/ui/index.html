@@ -166,6 +166,20 @@
     .mt{margin-top:.6rem}
     .divider{height:1px;background:var(--border);margin:.7rem 0}
     .tag{font-size:.7rem;padding:.1rem .4rem;border-radius:4px;background:var(--border);color:var(--sub)}
+
+    /* ── Health Panel ── */
+    #health-grid{display:flex;flex-wrap:wrap;gap:.55rem;margin-top:.6rem}
+    .health-item{display:flex;align-items:center;gap:.45rem;padding:.4rem .7rem;
+                 background:var(--bg);border:1px solid var(--border);border-radius:8px;flex:1;min-width:130px}
+    .health-item .h-icon{font-size:1rem;flex-shrink:0}
+    .health-item .h-name{font-size:.8rem;font-weight:600;flex:1}
+    .health-item .h-detail{font-size:.7rem;color:var(--sub);white-space:nowrap;overflow:hidden;
+                           text-overflow:ellipsis;max-width:100px}
+    .health-item.ok   {border-color:#2a5a3a}
+    .health-item.warn {border-color:#5a4a2a}
+    .health-item.down {border-color:#5a2a2a}
+    #health-overall{display:flex;align-items:center;gap:.6rem;margin-bottom:.4rem}
+    #health-score{font-size:.78rem;color:var(--sub)}
   </style>
 </head>
 <body>
@@ -305,6 +319,27 @@
         <div>💬 トーク <span id="q-speech" style="color:var(--accent2);font-weight:700">0</span></div>
         <div>🎵 音楽 <span id="q-music" style="color:var(--accent2);font-weight:700">0</span></div>
       </div>
+    </div>
+  </div>
+
+  <!-- ヘルス監視パネル (full width) -->
+  <div class="card full">
+    <div class="card-title">
+      🏥 システムヘルス
+      <span id="health-updated" class="tag" style="margin-left:auto;font-weight:400">--</span>
+    </div>
+    <div id="health-overall">
+      <span id="health-icon">⚪</span>
+      <span id="health-msg" style="font-size:.85rem;font-weight:600">確認中...</span>
+      <span id="health-score" class="tag">?/6</span>
+    </div>
+    <div id="health-grid">
+      <div class="health-item" id="h-discord"> <span class="h-icon">⚪</span><span class="h-name">Discord</span> <span class="h-detail">--</span></div>
+      <div class="health-item" id="h-voicevox"><span class="h-icon">⚪</span><span class="h-name">VOICEVOX</span><span class="h-detail">--</span></div>
+      <div class="health-item" id="h-nim">     <span class="h-icon">⚪</span><span class="h-name">NIM</span>     <span class="h-detail">--</span></div>
+      <div class="health-item" id="h-queue">   <span class="h-icon">⚪</span><span class="h-name">Queue</span>   <span class="h-detail">--</span></div>
+      <div class="health-item" id="h-playback"><span class="h-icon">⚪</span><span class="h-name">Playback</span><span class="h-detail">--</span></div>
+      <div class="health-item" id="h-storage"> <span class="h-icon">⚪</span><span class="h-name">Storage</span><span class="h-detail">--</span></div>
     </div>
   </div>
 
@@ -713,16 +748,64 @@ async function loadBgmVolume() {
   } catch (_) {}
 }
 
+// ─── ヘルス監視 ──────────────────────────────────────────────
+const HEALTH_SUBSYSTEMS = [
+  { id: "discord",  label: "Discord"  },
+  { id: "voicevox", label: "VOICEVOX" },
+  { id: "nim",      label: "NIM"      },
+  { id: "queue",    label: "Queue"    },
+  { id: "playback", label: "Playback" },
+  { id: "storage",  label: "Storage"  },
+];
+
+async function loadHealth() {
+  const d = await api("GET", "/health");
+  if (!d) return;
+
+  // 全体ステータス
+  const isUp   = d.status === "up";
+  const score  = d.score ?? "?/6";
+  const ok6    = d.score === "6/6";
+  const icon   = ok6 ? "🟢" : isUp ? "🟡" : "🔴";
+  const msgCol = ok6 ? "var(--accent2)" : isUp ? "var(--warn)" : "var(--danger)";
+
+  document.getElementById("health-icon").textContent = icon;
+  const msgEl = document.getElementById("health-msg");
+  msgEl.textContent = d.status === "up" ? (ok6 ? "すべて正常" : "一部低下") : "障害あり";
+  msgEl.style.color = msgCol;
+  document.getElementById("health-score").textContent = score;
+
+  // 更新時刻
+  if (d.timestamp) {
+    const t = new Date(d.timestamp).toLocaleTimeString("ja-JP", {hour:"2-digit",minute:"2-digit",second:"2-digit"});
+    document.getElementById("health-updated").textContent = `更新 ${t}`;
+  }
+
+  // 各サブシステム
+  for (const sys of HEALTH_SUBSYSTEMS) {
+    const row = document.getElementById(`h-${sys.id}`);
+    if (!row) continue;
+    const info = d[sys.id];
+    if (!info) continue;
+    const ok = info.ok;
+    const sIcon = ok ? "🟢" : "🔴";
+    row.querySelector(".h-icon").textContent  = sIcon;
+    row.querySelector(".h-detail").textContent = info.detail || (ok ? "OK" : "NG");
+    row.querySelector(".h-detail").title       = info.detail || "";
+    row.className = `health-item ${ok ? "ok" : "down"}`;
+  }
+}
+
 // ─── ポーリング ───────────────────────────────────────────────
 async function poll() {
   await Promise.all([refreshQueue(), loadNimUsage()]);
 }
-
 // ─── 初期化 ───────────────────────────────────────────────────
 (async () => {
-  await Promise.all([loadCast(), poll(), loadBgmVolume()]);
+  await Promise.all([loadCast(), poll(), loadBgmVolume(), loadHealth()]);
   setInterval(poll, 10_000);
   setInterval(loadCast, 30_000);
+  setInterval(loadHealth, 30_000);
 })();
 </script>
 </body>
