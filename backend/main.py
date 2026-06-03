@@ -63,6 +63,7 @@ async def main():
         tts_queue=tts_queue,
         playback_queue=playback_queue,
         playback_worker=playback,
+        broadcast_active=broadcast_active,
     )
 
     # ─── API サーバー ─────────────────────────────────────

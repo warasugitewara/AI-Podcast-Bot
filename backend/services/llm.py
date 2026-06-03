@@ -21,6 +21,7 @@ _client = AsyncOpenAI(base_url=LLM_API_BASE, api_key=LLM_API_KEY)
 # ─── 日次リクエストカウンター ──────────────────────────────
 _counter_date: date = date.today()
 _counter_count: int = 0
+_last_success_ts: float | None = None  # 最後にLLM生成が成功した時刻（health check用）
 
 def _can_request() -> bool:
     global _counter_date, _counter_count
@@ -34,8 +35,9 @@ def _can_request() -> bool:
     return True
 
 def _inc_counter():
-    global _counter_count
+    global _counter_count, _last_success_ts
     _counter_count += 1
+    _last_success_ts = time.time()
     remaining = NIM_MAX_DAILY_REQUESTS - _counter_count
     log.info(f"NIM使用: {_counter_count}/{NIM_MAX_DAILY_REQUESTS} (残{remaining}件)")
 
@@ -45,6 +47,7 @@ def get_daily_usage() -> dict:
         "limit": NIM_MAX_DAILY_REQUESTS,
         "remaining": NIM_MAX_DAILY_REQUESTS - _counter_count,
         "date": str(_counter_date),
+        "last_success_ts": _last_success_ts,
     }
 
 

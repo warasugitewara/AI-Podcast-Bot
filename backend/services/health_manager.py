@@ -59,7 +59,13 @@ class HealthReport:
         return sum(1 for s in self._subsystems() if s.ok)
 
     def overall_status(self) -> str:
-        """'up' | 'down'"""
+        """'up' | 'down'
+        必須サブシステム（discord/voicevox）がNGならdiscordは即DOWN。
+        それ以外は4/6以上でUP。
+        """
+        # Discord（bot接続）は必須: NGなら即DOWN
+        if not self.discord.ok:
+            return "down"
         return "up" if self.healthy_count() >= 4 else "down"
 
     def overall_msg(self) -> str:
@@ -113,17 +119,23 @@ class HealthManager:
 
     def __init__(self):
         # 外部コンポーネントは後から inject する
-        self._bot           = None
-        self._tts_queue     = None
-        self._playback_queue = None
+        self._bot             = None
+        self._tts_queue       = None
+        self._playback_queue  = None
         self._playback_worker = None
+        self._broadcast_active = None  # asyncio.Event: Set=放送中, Clear=停止中
         self._last_report: HealthReport | None = None
+        # NIM probe キャッシュ（HTTP probeは5分に1回まで）
+        self._nim_probe_ts:     float | None = None
+        self._nim_probe_result: SubsystemHealth | None = None
 
-    def inject(self, *, bot=None, tts_queue=None, playback_queue=None, playback_worker=None):
-        self._bot             = bot
-        self._tts_queue       = tts_queue
-        self._playback_queue  = playback_queue
-        self._playback_worker = playback_worker
+    def inject(self, *, bot=None, tts_queue=None, playback_queue=None,
+               playback_worker=None, broadcast_active=None):
+        self._bot              = bot
+        self._tts_queue        = tts_queue
+        self._playback_queue   = playback_queue
+        self._playback_worker  = playback_worker
+        self._broadcast_active = broadcast_active
 
     async def collect(self) -> HealthReport:
         """全サブシステムをasyncio.gatherで並列チェック。"""
@@ -167,8 +179,13 @@ class HealthManager:
             async with asyncio.timeout(CHECK_TIMEOUT_SEC):
                 if self._bot is None:
                     return SubsystemHealth(False, "bot未初期化")
-                ready = self._bot.is_ready()
-                return SubsystemHealth(ready, "" if ready else "bot not ready")
+                if not self._bot.is_ready():
+                    return SubsystemHealth(False, "bot not ready")
+                # VC接続確認
+                vc = getattr(self._bot, "voice_client", None)
+                if vc is None or not vc.is_connected():
+                    return SubsystemHealth(False, "VC未接続")
+                return SubsystemHealth(True, "VC connected")
         except TimeoutError:
             return SubsystemHealth(False, "timeout")
 
@@ -189,17 +206,39 @@ class HealthManager:
             return SubsystemHealth(False, str(e)[:60])
 
     async def _check_nim(self) -> SubsystemHealth:
+        """NIM到達性チェック。
+        アクティブHTTPプローブはAPI使用量を消費するため、
+        優先的にLLM成功タイムスタンプを参照する。
+        未呼び出し時のみ、5分キャッシュ付きのHTTPプローブを行う。
+        """
         try:
             async with asyncio.timeout(CHECK_TIMEOUT_SEC):
+                from services.llm import _last_success_ts, _counter_count
+                # 直近30分以内にLLM呼び出し成功 → 確実に到達可能
+                if _last_success_ts is not None and (time.time() - _last_success_ts) < 1800:
+                    mins = int((time.time() - _last_success_ts) // 60)
+                    return SubsystemHealth(True, f"last ok {mins}m ago")
+                # 今日すでに使用実績あり → 到達可能と判断
+                if _counter_count > 0:
+                    return SubsystemHealth(True, f"used {_counter_count} today")
+                # 起動直後で未使用: 5分キャッシュ付きHTTPプローブ
+                now = time.time()
+                if (self._nim_probe_ts is not None and
+                        self._nim_probe_result is not None and
+                        (now - self._nim_probe_ts) < 300):
+                    return self._nim_probe_result
                 from config import LLM_API_BASE, LLM_API_KEY
                 import aiohttp
                 headers = {"Authorization": f"Bearer {LLM_API_KEY}"}
                 url = f"{LLM_API_BASE.rstrip('/')}/models"
                 async with aiohttp.ClientSession() as sess:
                     async with sess.get(url, headers=headers) as resp:
-                        if resp.status == 200:
-                            return SubsystemHealth(True, "reachable")
-                        return SubsystemHealth(False, f"HTTP {resp.status}")
+                        result = (SubsystemHealth(True, "reachable")
+                                  if resp.status == 200
+                                  else SubsystemHealth(False, f"HTTP {resp.status}"))
+                        self._nim_probe_ts     = now
+                        self._nim_probe_result = result
+                        return result
         except TimeoutError:
             return SubsystemHealth(False, "timeout")
         except Exception as e:
@@ -209,17 +248,20 @@ class HealthManager:
         try:
             async with asyncio.timeout(CHECK_TIMEOUT_SEC):
                 issues = []
-                if self._tts_queue is not None:
-                    sz = self._tts_queue.qsize()
-                    if sz >= QUEUE_TTS_MAX:
-                        issues.append(f"tts_queue={sz}")
-                if self._playback_queue is not None:
-                    sz = self._playback_queue.qsize()
-                    if sz >= QUEUE_PLAYBACK_MAX:
-                        issues.append(f"playback_queue={sz}")
+                tts_sz = pb_sz = 0
 
-                tts_sz = self._tts_queue.qsize() if self._tts_queue else 0
-                pb_sz  = self._playback_queue.qsize() if self._playback_queue else 0
+                if self._tts_queue is not None:
+                    tts_sz  = self._tts_queue.qsize()
+                    maxsize = self._tts_queue.maxsize or QUEUE_TTS_MAX
+                    if tts_sz >= maxsize * 0.8:
+                        issues.append(f"tts_queue={tts_sz}/{maxsize}")
+
+                if self._playback_queue is not None:
+                    pb_sz   = self._playback_queue.qsize()
+                    maxsize = self._playback_queue.maxsize or QUEUE_PLAYBACK_MAX
+                    if pb_sz >= maxsize * 0.8:
+                        issues.append(f"playback_queue={pb_sz}/{maxsize}")
+
                 detail = f"tts={tts_sz} playback={pb_sz}"
                 return SubsystemHealth(len(issues) == 0, detail if not issues else ", ".join(issues))
         except TimeoutError:
@@ -228,6 +270,10 @@ class HealthManager:
     async def _check_playback(self) -> SubsystemHealth:
         try:
             async with asyncio.timeout(CHECK_TIMEOUT_SEC):
+                # 放送停止中（VC空室）はstale判定しない
+                if self._broadcast_active is not None and not self._broadcast_active.is_set():
+                    return SubsystemHealth(True, "broadcast paused")
+
                 pw = self._playback_worker
                 if pw is None:
                     return SubsystemHealth(False, "worker未初期化")

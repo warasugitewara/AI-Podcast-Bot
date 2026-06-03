@@ -48,11 +48,11 @@ async def _push(url: str, status: str, msg: str) -> None:
     }
     try:
         async with aiohttp.ClientSession() as sess:
-            ping_ms = int((time.time() - t0) * 1000)
-            params["ping"] = str(ping_ms)
             async with sess.get(url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                ping_ms = int((time.time() - t0) * 1000)
+                params["ping"] = str(ping_ms)
                 if resp.status == 200:
-                    log.info(f"Uptime Kuma push OK ({status})")
+                    log.info(f"Uptime Kuma push OK ({status}, {ping_ms}ms)")
                 else:
                     log.warning(f"Uptime Kuma push HTTP {resp.status}")
     except Exception as e:
